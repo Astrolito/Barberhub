@@ -91,7 +91,7 @@ export function Switch({ checked, onChange, label, disabled }: { checked: boolea
       onClick={() => onChange(!checked)}
       className={cx('relative h-[30px] w-[52px] shrink-0 rounded-full transition-colors duration-200 ease-out disabled:opacity-50', checked ? 'bg-brand' : 'bg-line')}
     >
-      <span className={cx('absolute top-[3px] h-6 w-6 rounded-full bg-white shadow transition-transform duration-200 ease-out', checked ? 'translate-x-[25px]' : 'translate-x-[3px]')} />
+      <span className={cx('absolute left-0 top-[3px] h-6 w-6 rounded-full bg-white shadow transition-transform duration-200 ease-out', checked ? 'translate-x-[25px]' : 'translate-x-[3px]')} />
     </button>
   )
 }

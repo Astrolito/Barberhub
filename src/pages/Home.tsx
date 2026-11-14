@@ -5,7 +5,7 @@ import { Button, Capa, Note, Page, SearchInput, Switch, cx } from '../components
 import { ILocate, ILocateOff, IPin, ISearch } from '../components/Icons'
 import { OPCOES_DISTANCIA } from '../data/seed'
 import { raioAplicado } from '../domain/rules'
-import { capturarGps, distanciaKm, geocodificarEndereco } from '../lib/geo'
+import { BAIRROS, capturarGps, distanciaKm, geocodificarEndereco, gpsIndisponivel, pontoDoBairro } from '../lib/geo'
 import { km, primeiroNome } from '../lib/format'
 import type { Barbearia } from '../domain/types'
 
@@ -17,6 +17,7 @@ export default function Home() {
   const [endereco, setEndereco] = useState(u.localizacao?.origem === 'endereco' ? u.localizacao.rotulo : '')
   const [carregando, setCarregando] = useState<'gps' | 'endereco' | null>(null)
 
+  const semGps = useMemo(gpsIndisponivel, [])
   const raio = raioAplicado(u)
   const ref = u.localizacao
 
@@ -97,6 +98,7 @@ export default function Home() {
             <div className="text-[16px] font-medium">Usar minha localização</div>
             {carregando === 'gps' && <div className="text-[13px] text-muted">Obtendo posição…</div>}
             {ref && carregando !== 'gps' && <div className="truncate text-[13px] text-muted">{ref.rotulo}</div>}
+            {!ref && carregando !== 'gps' && semGps && <div className="text-[13px] leading-[18px] text-faint">Indisponível aqui. Use o bairro ou o endereço abaixo.</div>}
           </div>
           <Switch label="Usar minha localização" checked={ref?.origem === 'gps'} disabled={carregando === 'gps'} onChange={ligarGps} />
         </div>
@@ -118,6 +120,31 @@ export default function Home() {
             </button>
           </div>
         </form>
+
+        <div className="mt-4">
+          <label htmlFor="bairro" className="text-[15px] font-semibold">
+            Ou escolha seu bairro
+          </label>
+          <select
+            id="bairro"
+            value={ref?.origem === 'bairro' ? ref.rotulo.replace('Bairro ', '') : ''}
+            onChange={(e) => {
+              const p = pontoDoBairro(e.target.value)
+              if (p) {
+                atualizarUsuario({ localizacao: p })
+                setEndereco('')
+              }
+            }}
+            className="mt-2 h-12 w-full appearance-none rounded-xl border border-line bg-surface2 px-3.5 text-[16px] focus:border-brand focus:outline-none"
+          >
+            <option value="">Selecione o bairro</option>
+            {Object.keys(BAIRROS).map((b) => (
+              <option key={b} value={b}>
+                {b}
+              </option>
+            ))}
+          </select>
+        </div>
 
         <div className="mt-5">
           <div className="text-[15px] font-semibold">Distância das barbearias</div>

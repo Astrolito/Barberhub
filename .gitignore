@@ -1,7 +1,10 @@
 node_modules
 dist
 dist-single
-android
-ios
 .DS_Store
 *.log
+android/app/build
+android/build
+android/.gradle
+android/local.properties
+android/app/src/main/assets/public

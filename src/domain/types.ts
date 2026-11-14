@@ -26,7 +26,7 @@ export interface Usuario {
 export interface PontoBusca {
   lat: number
   lng: number
-  origem: 'gps' | 'endereco'
+  origem: 'gps' | 'endereco' | 'bairro'
   rotulo: string
 }
 

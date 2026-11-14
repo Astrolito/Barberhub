@@ -9,7 +9,10 @@ npm install
 npm run dev          # http://localhost:5173
 npm run build        # gera dist/ (web e Capacitor)
 npm run build:single # gera dist-single/index.html, um arquivo único para prévia
+npm run dev:https    # https na rede local, para testar o GPS no celular/tablet
 ```
+
+Localização: o navegador só libera o GPS em `https` (ou `localhost`). Para testar no tablet pelo PC, use `npm run dev:https`, abra o endereço `https://IP-do-PC:5173` no tablet e aceite o aviso de certificado. Na prévia publicada no claude.ai o GPS fica bloqueado; use o bairro ou o endereço.
 
 Contas de demonstração (tela de entrada):
 
@@ -24,22 +27,15 @@ Para zerar os dados: menu lateral > Sobre o BarberHUB > Restaurar dados de demon
 
 O app roda dentro de um webview nativo com Capacitor. A configuração está em `capacitor.config.ts` (`appId: br.com.barberhub.app`).
 
+O projeto Android já está em `android/`, com as permissões de localização. No app nativo o GPS usa o plugin `@capacitor/geolocation`, que pede a permissão do sistema.
+
 ```bash
-npm run build
-npx cap add android   # uma vez; requer Android Studio
+npm run android       # build + sync + abre o Android Studio (depois: Run ▶)
 npx cap add ios       # uma vez; requer macOS + Xcode
-npm run android       # build + sync + abre o Android Studio
 npm run ios           # build + sync + abre o Xcode
 ```
 
-Para localização no Android, adicione em `android/app/src/main/AndroidManifest.xml`:
-
-```xml
-<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-```
-
-No iOS, adicione `NSLocationWhenInUseUsageDescription` no `Info.plist`.
+No iOS, adicione `NSLocationWhenInUseUsageDescription` no `Info.plist` depois do `cap add ios`.
 
 ## Arquitetura
 
