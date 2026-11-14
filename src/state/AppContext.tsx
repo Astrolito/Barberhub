@@ -1,55 +1,48 @@
-import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { Agendamento, Banco, Usuario } from '../domain/types'
-import { RepositorioLocal } from '../data/repository'
-import * as R from '../domain/rules'
+import type { Backend, Estado } from '../data/backend'
+import { criarBackendLocal } from '../data/backendLocal'
+import { criarBackendSupabase } from '../data/backendSupabase'
 
 type Toast = { id: number; tipo: 'ok' | 'erro' | 'info'; texto: string }
 
 interface Ctx {
+  modo: Backend['modo']
+  pronto: boolean
   db: Banco
   usuario: Usuario | null
-  entrar(email: string): boolean
-  sair(): void
-  atualizarUsuario(patch: Partial<Usuario>): void
-  alternarFavorito(barbeariaId: string): boolean
-  prepararHorarios(profissionalId: string, dia: string): void
-  confirmar(horarioId: string, servicoId: string): Agendamento | null
-  cancelar(agendamentoId: string): void
-  finalizar(agendamentoId: string): void
-  alternarBloqueio(horarioId: string): void
-  atualizarFotoBarbearia(barbeariaId: string, foto: string | undefined): void
-  resetarDados(): void
+  entrar(email: string): Promise<'entrou' | 'codigo_enviado' | null>
+  verificarCodigo(email: string, codigo: string): Promise<boolean>
+  sair(): Promise<void>
+  atualizarUsuario(patch: Partial<Usuario>): Promise<void>
+  alternarFavorito(barbeariaId: string): Promise<void>
+  prepararHorarios(profissionalId: string, dia: string): Promise<void>
+  confirmar(horarioId: string, servicoId: string): Promise<Agendamento | null>
+  cancelar(agendamentoId: string): Promise<void>
+  finalizar(agendamentoId: string): Promise<void>
+  alternarBloqueio(horarioId: string): Promise<void>
+  atualizarFotoBarbearia(barbeariaId: string, foto: string | undefined): Promise<void>
+  resetarDados?: () => Promise<void>
   toasts: Toast[]
   toast(texto: string, tipo?: Toast['tipo']): void
 }
 
 const AppCtx = createContext<Ctx | null>(null)
-const repo = new RepositorioLocal()
-const SESSAO = 'barberhub:sessao'
 
-function lerSessao() {
-  try {
-    return localStorage.getItem(SESSAO)
-  } catch {
-    return null
-  }
-}
+const URL_SB = import.meta.env.VITE_SUPABASE_URL as string | undefined
+const CHAVE_SB = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
+const backend: Backend = URL_SB && CHAVE_SB ? criarBackendSupabase(URL_SB, CHAVE_SB) : criarBackendLocal()
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [db, setDb] = useState<Banco>(() => repo.carregar())
-  const [email, setEmail] = useState<string | null>(lerSessao)
+  const [estado, setEstado] = useState<Estado>({
+    db: { versao: 1, usuarios: [], barbearias: [], profissionais: [], servicos: [], horarios: [], agendamentos: [] },
+    email: null,
+    pronto: false,
+  })
   const [toasts, setToasts] = useState<Toast[]>([])
   const seq = useRef(0)
-  const dbRef = useRef(db)
-  dbRef.current = db
 
-  const usuario = useMemo(() => db.usuarios.find((u) => u.email === email) ?? null, [db, email])
-
-  const commit = useCallback((next: Banco) => {
-    dbRef.current = next
-    repo.salvar(next)
-    setDb(next)
-  }, [])
+  useEffect(() => backend.iniciar(setEstado), [])
 
   const toast = useCallback((texto: string, tipo: Toast['tipo'] = 'ok') => {
     const id = ++seq.current
@@ -58,9 +51,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const tentar = useCallback(
-    <T,>(fn: () => T): T | null => {
+    async <T,>(fn: () => Promise<T>, ok?: string, tipo: Toast['tipo'] = 'ok'): Promise<T | null> => {
       try {
-        return fn()
+        const r = await fn()
+        if (ok) toast(ok, tipo)
+        return r
       } catch (e) {
         toast(e instanceof Error ? e.message : 'Algo deu errado.', 'erro')
         return null
@@ -69,101 +64,54 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [toast],
   )
 
-  const exigirUsuario = () => {
-    const u = dbRef.current.usuarios.find((x) => x.email === email)
-    if (!u) throw new R.RegraError('Entre na sua conta para continuar.')
-    return u
-  }
+  const usuario = useMemo(() => estado.db.usuarios.find((u) => u.email === estado.email) ?? null, [estado])
 
   const value: Ctx = {
-    db,
+    modo: backend.modo,
+    pronto: estado.pronto,
+    db: estado.db,
     usuario,
     toasts,
     toast,
-    entrar(e) {
-      const alvo = e.trim().toLowerCase()
-      const u = dbRef.current.usuarios.find((x) => x.email === alvo)
-      if (!u) {
-        toast('Conta não encontrada. Use uma das contas de demonstração.', 'erro')
-        return false
-      }
-      try {
-        localStorage.setItem(SESSAO, u.email)
-      } catch {
-        /* ignore */
-      }
-      setEmail(u.email)
-      return true
+    entrar: (email) => tentar(() => backend.entrar(email)),
+    verificarCodigo: async (email, codigo) => (await tentar(() => backend.verificarCodigo(email, codigo).then(() => true))) ?? false,
+    sair: async () => {
+      await tentar(() => backend.sair())
     },
-    sair() {
-      try {
-        localStorage.removeItem(SESSAO)
-      } catch {
-        /* ignore */
-      }
-      setEmail(null)
+    atualizarUsuario: async (patch) => {
+      await tentar(() => backend.atualizarUsuario(patch))
     },
-    atualizarUsuario(patch) {
-      tentar(() => {
-        const u = exigirUsuario()
-        commit({ ...dbRef.current, usuarios: dbRef.current.usuarios.map((x) => (x.id === u.id ? { ...x, ...patch } : x)) })
-      })
+    alternarFavorito: async (id) => {
+      if (!usuario) return
+      const favoritos = usuario.favoritos.includes(id) ? usuario.favoritos.filter((x) => x !== id) : [...usuario.favoritos, id]
+      await tentar(() => backend.atualizarUsuario({ favoritos }))
     },
-    alternarFavorito(id) {
-      return (
-        tentar(() => {
-          const u = exigirUsuario()
-          const fav = u.favoritos.includes(id)
-          const favoritos = fav ? u.favoritos.filter((x) => x !== id) : [...u.favoritos, id]
-          commit({ ...dbRef.current, usuarios: dbRef.current.usuarios.map((x) => (x.id === u.id ? { ...x, favoritos } : x)) })
-          return !fav
-        }) ?? false
-      )
+    prepararHorarios: async (p, d) => {
+      await tentar(() => backend.prepararHorarios(p, d))
     },
-    prepararHorarios(profissionalId, dia) {
-      tentar(() => commit(R.prepararHorarios(dbRef.current, profissionalId, dia)))
+    confirmar: async (h, s) => {
+      const ag = await tentar(() => backend.confirmar(h, s))
+      if (ag?.status === 'Confirmado') toast('Agendamento confirmado!')
+      else if (ag) toast('Esse horário acabou de ficar indisponível. Escolha outro.', 'erro')
+      return ag
     },
-    confirmar(horarioId, servicoId) {
-      return tentar(() => {
-        const u = exigirUsuario()
-        const { db: next, agendamento } = R.confirmarAgendamento(dbRef.current, { clienteEmail: u.email, horarioId, servicoId })
-        commit(next)
-        if (agendamento.status === 'Confirmado') toast('Agendamento confirmado!')
-        else toast('Esse horário acabou de ficar indisponível. Escolha outro.', 'erro')
-        return agendamento
-      })
+    cancelar: async (id) => {
+      await tentar(() => backend.cancelar(id), 'Agendamento cancelado. O horário foi liberado.', 'info')
     },
-    cancelar(id) {
-      tentar(() => {
-        commit(R.cancelarAgendamento(dbRef.current, id, exigirUsuario()))
-        toast('Agendamento cancelado. O horário foi liberado.', 'info')
-      })
+    finalizar: async (id) => {
+      await tentar(() => backend.finalizar(id), 'Atendimento finalizado.')
     },
-    finalizar(id) {
-      tentar(() => {
-        commit(R.finalizarAtendimento(dbRef.current, id, exigirUsuario()))
-        toast('Atendimento finalizado.')
-      })
+    alternarBloqueio: async (id) => {
+      await tentar(() => backend.alternarBloqueio(id))
     },
-    alternarBloqueio(id) {
-      tentar(() => commit(R.alternarBloqueio(dbRef.current, id, exigirUsuario())))
+    atualizarFotoBarbearia: async (id, foto) => {
+      await tentar(() => backend.atualizarFotoBarbearia(id, foto), foto ? 'Foto atualizada.' : 'Foto removida.')
     },
-    atualizarFotoBarbearia(barbeariaId, foto) {
-      tentar(() => {
-        const u = exigirUsuario()
-        if (u.papel !== 'Barbeiro' || u.barbeariaId !== barbeariaId)
-          throw new R.RegraError('Apenas o barbeiro vinculado pode alterar a foto.')
-        commit({
-          ...dbRef.current,
-          barbearias: dbRef.current.barbearias.map((b) => (b.id === barbeariaId ? { ...b, fotoCapa: foto } : b)),
-        })
-        toast(foto ? 'Foto atualizada.' : 'Foto removida.')
-      })
-    },
-    resetarDados() {
-      commit(repo.resetar())
-      toast('Dados de demonstração restaurados.', 'info')
-    },
+    resetarDados: backend.resetar
+      ? async () => {
+          await tentar(() => backend.resetar!(), 'Dados de demonstração restaurados.', 'info')
+        }
+      : undefined,
   }
 
   return <AppCtx.Provider value={value}>{children}</AppCtx.Provider>

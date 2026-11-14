@@ -101,8 +101,8 @@ function Drawer({ onClose }: { onClose: () => void }) {
         </nav>
         <button
           onClick={() =>
-            fechar(() => {
-              sair()
+            fechar(async () => {
+              await sair()
               nav('/entrar', { replace: true })
             })
           }
@@ -137,8 +137,9 @@ export function Toaster() {
 }
 
 export function RequireAuth({ children }: { children: ReactNode }) {
-  const { usuario } = useApp()
+  const { usuario, pronto } = useApp()
   const loc = useLocation()
+  if (!pronto) return <Carregando />
   if (!usuario) return <Navigate to="/entrar" replace state={{ from: loc.pathname }} />
   return <>{children}</>
 }
@@ -148,5 +149,18 @@ export function BackLink({ to, children }: { to: string; children: ReactNode }) 
     <Link to={to} className="text-brand-ink underline-offset-4 hover:underline">
       {children}
     </Link>
+  )
+}
+
+export function Carregando() {
+  return (
+    <div className="grid min-h-[100dvh] place-items-center">
+      <div className="flex flex-col items-center gap-4 animate-fade-in">
+        <span className="text-[22px] font-bold tracking-tight">
+          Barber<span className="text-brand-ink">HUB</span>
+        </span>
+        <span className="h-5 w-5 animate-spin rounded-full border-2 border-line border-t-brand" />
+      </div>
+    </div>
   )
 }

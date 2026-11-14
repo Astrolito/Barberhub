@@ -49,9 +49,11 @@ export function Sobre() {
           </Note>
         </div>
         <p className="mt-5 text-[14px] text-faint">Equipe: Renatto Gabriel (PO), Nicolas Duarte (desenvolvimento), Sávio Santos (QA) e Yan Félix (documentação).</p>
-        <Button variant="ghost" size="md" className="mt-8" onClick={resetarDados}>
-          Restaurar dados de demonstração
-        </Button>
+        {resetarDados && (
+          <Button variant="ghost" size="md" className="mt-8" onClick={resetarDados}>
+            Restaurar dados de demonstração
+          </Button>
+        )}
       </Page>
     </>
   )

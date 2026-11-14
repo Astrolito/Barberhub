@@ -132,10 +132,10 @@ export function Agendar() {
   const sel = servicos.find((s) => s.id === servicoId)
   const indisponivel = h.status !== 'Livre' || new Date(h.inicio).getTime() <= Date.now()
 
-  function onConfirmar() {
+  async function onConfirmar() {
     if (!sel) return
     setEnviando(true)
-    const ag = confirmar(h!.id, sel.id)
+    const ag = await confirmar(h!.id, sel.id)
     setEnviando(false)
     if (ag?.status === 'Confirmado') nav(`/agendamento/${ag.id}?novo=1`, { replace: true })
     else setAberto(false)
@@ -217,7 +217,7 @@ export function Agendar() {
         </div>
 
         <Button className="mt-5" disabled={!sel || enviando} onClick={onConfirmar}>
-          Confirmar agendamento
+          {enviando ? 'Confirmando…' : 'Confirmar agendamento'}
         </Button>
       </Sheet>
     </>

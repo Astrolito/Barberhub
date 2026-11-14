@@ -23,6 +23,30 @@ Contas de demonstração (tela de entrada):
 
 Para zerar os dados: menu lateral > Sobre o BarberHUB > Restaurar dados de demonstração.
 
+## Backend (Supabase) e publicação (Vercel)
+
+O app tem dois modos, escolhidos pelas variáveis de ambiente (veja `.env.example`):
+
+- **Demonstração** (sem variáveis): dados no aparelho, contas de demonstração.
+- **Supabase** (`VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY`): login sem senha por e-mail (link ou código), reservas compartilhadas e atualização em tempo real.
+
+### Supabase
+
+1. Crie um projeto e rode, no SQL Editor, `supabase/migrations/20261114000000_init.sql` e depois `supabase/seed.sql` (ou `supabase db push` com a CLI).
+2. Em **Authentication > URL Configuration**, defina o *Site URL* como o domínio da Vercel e adicione-o em *Redirect URLs*.
+3. Em **Authentication > Email Templates > Magic Link**, inclua `{{ .Token }}` no texto para o e-mail trazer também o código de 6 dígitos (necessário no app instalado).
+4. Para ter acesso de barbeiro, troque o e-mail de acesso do profissional antes do primeiro login:
+   `update profissionais set email_acesso = 'seu@email.com' where id = 'prof-001';`
+   Quem entrar com esse e-mail vira Barbeiro vinculado à Procópio.
+
+Segurança: catálogo e horários são públicos para leitura; cada pessoa só lê o próprio perfil e as reservas em que é cliente ou barbeiro (RLS). Horários, reservas e capa só mudam pelas funções SQL (`confirmar_agendamento`, `cancelar_agendamento`, `finalizar_atendimento`, `alternar_bloqueio`, `preparar_horarios`, `atualizar_foto_barbearia`), que travam a linha e aplicam as regras no mesmo commit. Um índice único impede duas reservas confirmadas no mesmo horário.
+
+Se mudar `src/data/seed.ts`, gere o SQL de novo com `node scripts/gerar-seed-sql.mjs`.
+
+### Vercel
+
+Importe o repositório em vercel.com/new. O `vercel.json` já define o build (`npm run build`, saída `dist`). Em *Settings > Environment Variables*, adicione `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY` e faça um novo deploy. Sem elas, o site publica em modo demonstração.
+
 ## Mobile (Android/iOS via Capacitor)
 
 O app roda dentro de um webview nativo com Capacitor. A configuração está em `capacitor.config.ts` (`appId: br.com.barberhub.app`).
@@ -78,6 +102,6 @@ src/
 
 ## Limites conhecidos
 
-- Os dados ficam no aparelho (localStorage); não há backend nem login real por e-mail ainda.
+- No modo demonstração os dados ficam no aparelho; no modo Supabase ficam no servidor.
 - Coordenadas das barbearias são aproximadas pelo endereço/bairro; logos reais não estão incluídas (a capa usa a identidade tipográfica até o barbeiro enviar uma foto).
 - Serviços, preços, profissionais e horários são dados acadêmicos, sem parceria com as empresas.

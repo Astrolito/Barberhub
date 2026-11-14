@@ -68,8 +68,8 @@ export default function Perfil() {
       </select>
 
       <button
-        onClick={() => {
-          sair()
+        onClick={async () => {
+          await sair()
           nav('/entrar', { replace: true })
         }}
         className="press mt-8 flex h-12 w-full items-center justify-center gap-2 rounded-xl text-[16px] font-semibold text-danger hover:bg-danger-soft"
@@ -130,8 +130,8 @@ export function MeusDados() {
         <Button
           className="mt-7"
           disabled={!nome.trim()}
-          onClick={() => {
-            atualizarUsuario({ nome: nome.trim(), foto })
+          onClick={async () => {
+            await atualizarUsuario({ nome: nome.trim(), foto })
             toast('Dados atualizados.')
             nav(-1)
           }}
