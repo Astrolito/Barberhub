@@ -1,0 +1,39 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html { color-scheme: dark; -webkit-tap-highlight-color: transparent; }
+  body {
+    @apply bg-bg font-sans text-ink antialiased;
+    font-feature-settings: 'cv11', 'ss01';
+    overscroll-behavior-y: none;
+  }
+  ::selection { background: rgba(29, 111, 224, 0.45); }
+  :focus-visible { outline: 2px solid #5b9cf5; outline-offset: 2px; border-radius: 10px; }
+}
+
+@layer utilities {
+  .pt-safe { padding-top: env(safe-area-inset-top); }
+  .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+  .no-scrollbar { scrollbar-width: none; }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+
+  /* Feedback tátil: escala sutil ao pressionar, sem atraso na soltura. */
+  .press { transition-property: transform, background-color, color, opacity, border-color; transition-duration: 150ms; transition-timing-function: cubic-bezier(0.23, 1, 0.32, 1); }
+  .press:active { transform: scale(0.97); }
+  .card-press { transition: transform 200ms cubic-bezier(0.23, 1, 0.32, 1); }
+  .card-press:active { transform: scale(0.98); }
+  .row-press { transition: background-color 150ms ease-out; border-radius: 12px; }
+  .row-press:active { background-color: rgba(255, 255, 255, 0.04); }
+  .sheet { transition: transform 260ms cubic-bezier(0.32, 0.72, 0, 1); }
+}
+
+@media (hover: none) {
+  .group:hover .group-hover\:scale-\[1\.03\] { transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 1ms !important; transition-duration: 1ms !important; }
+  .press:active, .card-press:active { transform: none; }
+}
