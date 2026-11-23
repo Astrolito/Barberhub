@@ -47,6 +47,9 @@ export function criarBackendLocal(): Backend {
       emitir()
       return () => (ouvinte = null)
     },
+    async recarregar() {
+      emitir()
+    },
     async entrar(e) {
       const alvo = e.trim().toLowerCase()
       if (!db.usuarios.some((x) => x.email === alvo)) throw new R.RegraError('Conta não encontrada. Use uma das contas de demonstração.')
@@ -69,18 +72,40 @@ export function criarBackendLocal(): Backend {
       commit(R.prepararHorarios(db, p, d))
     },
     async confirmar(h, s) {
-      const r = R.confirmarAgendamento(db, { clienteEmail: eu().email, horarioId: h, servicoId: s })
+      const r = R.confirmarAgendamento(db, { cliente: eu(), horarioId: h, servicoId: s })
+      commit(r.db)
+      return r.agendamento
+    },
+    async remarcar(id, h) {
+      const r = R.remarcarAgendamento(db, id, h, eu())
       commit(r.db)
       return r.agendamento
     },
     async cancelar(id) {
       commit(R.cancelarAgendamento(db, id, eu()))
     },
-    async finalizar(id) {
-      commit(R.finalizarAtendimento(db, id, eu()))
+    async encerrar(id, resultado) {
+      commit(R.encerrarAtendimento(db, id, eu(), resultado))
     },
     async alternarBloqueio(id) {
       commit(R.alternarBloqueio(db, id, eu()))
+    },
+    async salvarJornada(j) {
+      commit(R.salvarJornada(db, eu(), j))
+    },
+    async salvarServico(s) {
+      const r = R.salvarServico(db, eu(), s)
+      commit(r.db)
+      return r.servico
+    },
+    async atualizarBarbearia(dados) {
+      commit(R.atualizarBarbearia(db, eu(), dados))
+    },
+    async avaliar(id, nota, comentario) {
+      commit(R.avaliarAtendimento(db, id, eu(), nota, comentario))
+    },
+    async subirImagem(_pasta, dataUrl) {
+      return dataUrl
     },
     async atualizarFotoBarbearia(id, foto) {
       const u = eu()

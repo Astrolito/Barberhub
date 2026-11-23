@@ -21,7 +21,21 @@ export class RepositorioLocal implements Repositorio {
       const raw = localStorage.getItem(CHAVE)
       if (raw) {
         const db = JSON.parse(raw) as Banco
-        if (db.versao === 1) return (this.memoria = db)
+        if (db.versao === 2) return (this.memoria = db)
+        // v1 → v2: avaliações, nome do cliente na reserva, sem tentativas "Indisponível".
+        if (db.versao === 1) {
+          const nomes = new Map(db.usuarios.map((u) => [u.email, u.nome]))
+          const v2: Banco = {
+            ...db,
+            versao: 2,
+            avaliacoes: [],
+            agendamentos: db.agendamentos
+              .filter((a) => a.status !== 'Indisponível')
+              .map((a) => ({ ...a, clienteNome: a.clienteNome ?? nomes.get(a.clienteEmail) })),
+          }
+          this.salvar(v2)
+          return (this.memoria = v2)
+        }
       }
     } catch {
       /* storage indisponível: segue em memória */

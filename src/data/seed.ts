@@ -20,7 +20,7 @@ export const DEMO_BARBEIRO_EMAIL = 'barbeiro@barberhub.app'
 
 export function criarSeed(): Banco {
   return {
-    versao: 1,
+    versao: 2,
     usuarios: [
       {
         id: 'u-cliente',
@@ -190,5 +190,6 @@ export function criarSeed(): Banco {
     ],
     horarios: [],
     agendamentos: [],
+    avaliacoes: [],
   }
 }
