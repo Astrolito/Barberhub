@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useApp, useUsuario } from '../state/AppContext'
 import { Button, Capa, Note, Page, SearchInput, Switch, cx } from '../components/ui'
-import { ILocate, ILocateOff, IPin, ISearch, IStar } from '../components/Icons'
+import { ILocate, ILocateOff, IMap, IPin, ISearch, IStar } from '../components/Icons'
 import { OPCOES_DISTANCIA } from '../data/seed'
 import { notaDaBarbearia, raioAplicado } from '../domain/rules'
 import { BAIRROS, capturarGps, distanciaKm, geocodificarEndereco, gpsIndisponivel, pontoDoBairro } from '../lib/geo'
@@ -192,6 +192,9 @@ export default function Home() {
           <IPin size={15} /> {lista.length} {lista.length === 1 ? 'barbearia' : 'barbearias'} {raio === 0 ? 'no catálogo' : `em até ${raio} km`}, da mais próxima para a mais distante
         </p>
       )}
+      <Link to="/mapa" className="press mt-3 inline-flex h-9 items-center gap-1.5 rounded-full border border-line bg-surface2 px-3.5 text-[14px] font-medium text-brand-ink">
+        <IMap size={17} /> Ver no mapa
+      </Link>
       {lista.length ? (
         <div className="mt-4 grid grid-cols-2 gap-x-3.5 gap-y-6">
           {lista.map(({ b, dist }, i) => (
