@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import type { Barbearia, StatusAgendamento } from '../domain/types'
-import { IBack, IChevron, ISearch, IX } from './Icons'
+import { IBack, IChevron, ISearch, IStar, IX } from './Icons'
 
 const cx = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(' ')
 export { cx }
@@ -161,8 +161,43 @@ const COR_STATUS: Record<StatusAgendamento, string> = {
   Finalizado: 'text-ok',
   Cancelado: 'text-danger',
   Indisponível: 'text-faint',
+  'Não compareceu': 'text-amber-400',
 }
-export const StatusLabel = ({ s }: { s: StatusAgendamento }) => <span className={COR_STATUS[s]}>{s.toUpperCase()}</span>
+/** aguardando: confirmado, mas o horário já começou e falta o barbeiro encerrar. */
+export const StatusLabel = ({ s, aguardando }: { s: StatusAgendamento; aguardando?: boolean }) =>
+  aguardando ? <span className="text-amber-400">AGUARDANDO O BARBEIRO</span> : <span className={COR_STATUS[s]}>{s.toUpperCase()}</span>
+
+/** Estrelas: só leitura (valor fracionado) ou escolha (onChange). */
+export function Estrelas({ valor, onChange, size = 18 }: { valor: number; onChange?: (n: number) => void; size?: number }) {
+  return (
+    <span className="inline-flex items-center gap-0.5" role={onChange ? 'radiogroup' : 'img'} aria-label={onChange ? 'Nota' : `${valor.toFixed(1)} de 5 estrelas`}>
+      {[1, 2, 3, 4, 5].map((n) => {
+        const cheia = valor >= n - 0.25
+        const icone = <IStar size={size} filled={cheia} className={cheia ? 'text-amber-400' : 'text-faint'} />
+        return onChange ? (
+          <button key={n} type="button" role="radio" aria-checked={valor === n} aria-label={`${n} estrela${n > 1 ? 's' : ''}`} onClick={() => onChange(n)} className="press p-1">
+            {icone}
+          </button>
+        ) : (
+          <span key={n}>{icone}</span>
+        )
+      })}
+    </span>
+  )
+}
+
+/** Campo de formulário com rótulo. */
+export function Campo({ label, dica, children }: { label: string; dica?: string; children: ReactNode }) {
+  return (
+    <label className="mt-5 block">
+      <span className="text-[15px] font-semibold">{label}</span>
+      <div className="mt-2">{children}</div>
+      {dica && <span className="mt-1.5 block text-[13px] text-faint">{dica}</span>}
+    </label>
+  )
+}
+export const inputCls =
+  'h-12 w-full rounded-xl border border-line bg-surface2 px-3.5 text-[16px] [color-scheme:dark] placeholder:text-faint focus:border-brand focus:outline-none'
 
 /** Capa da barbearia: foto enviada ou identidade de espera. */
 export function Capa({ b, className, big }: { b: Barbearia; className?: string; big?: boolean }) {

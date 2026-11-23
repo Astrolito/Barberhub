@@ -2,9 +2,9 @@ import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useApp, useUsuario } from '../state/AppContext'
 import { Button, Capa, Note, Page, SearchInput, Switch, cx } from '../components/ui'
-import { ILocate, ILocateOff, IMap, IPin, ISearch } from '../components/Icons'
+import { ILocate, ILocateOff, IMap, IPin, ISearch, IStar } from '../components/Icons'
 import { OPCOES_DISTANCIA } from '../data/seed'
-import { raioAplicado } from '../domain/rules'
+import { notaDaBarbearia, raioAplicado } from '../domain/rules'
 import { BAIRROS, capturarGps, distanciaKm, geocodificarEndereco, gpsIndisponivel, pontoDoBairro } from '../lib/geo'
 import { km, primeiroNome } from '../lib/format'
 import type { Barbearia } from '../domain/types'
@@ -216,6 +216,8 @@ export default function Home() {
 }
 
 export function CardBarbearia({ b, dist, i = 0 }: { b: Barbearia; dist?: number; i?: number }) {
+  const { db } = useApp()
+  const nota = notaDaBarbearia(db, b.id)
   return (
     <Link to={`/barbearia/${b.id}`} className="card-press group block animate-fade-up" style={{ animationDelay: `${Math.min(i, 8) * 40}ms` }}>
       <div className="relative aspect-[4/3] overflow-hidden rounded-2xl border border-line/60">
@@ -226,7 +228,15 @@ export function CardBarbearia({ b, dist, i = 0 }: { b: Barbearia; dist?: number;
       </div>
       <div className="mt-2.5 text-[12px] font-semibold uppercase tracking-wide text-brand-ink">{b.cidade}, AM</div>
       <div className="mt-0.5 text-[15.5px] font-semibold leading-5">{b.nome}</div>
-      <div className="mt-0.5 text-[14px] text-muted">{b.bairro}</div>
+      <div className="mt-0.5 flex items-center gap-1.5 text-[14px] text-muted">
+        {b.bairro}
+        {nota && (
+          <span className="flex items-center gap-0.5 text-[13px] font-semibold text-ink">
+            <IStar size={13} filled className="text-amber-400" />
+            {nota.media.toFixed(1).replace('.', ',')}
+          </span>
+        )}
+      </div>
     </Link>
   )
 }

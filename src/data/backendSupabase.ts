@@ -1,6 +1,7 @@
-import { createClient, type SupabaseClient } from '@supabase/supabase-js'
-import type { Agendamento, Banco, Barbearia, Horario, Profissional, Servico, Usuario } from '../domain/types'
+import { createClient, type RealtimePostgresChangesPayload, type SupabaseClient } from '@supabase/supabase-js'
+import type { Agendamento, Avaliacao, Banco, Barbearia, Horario, Profissional, Servico, Usuario } from '../domain/types'
 import type { Backend, Estado } from './backend'
+import { uuid } from '../lib/id'
 
 // Linhas do Postgres (snake_case) → modelo do app (camelCase).
 type Row = Record<string, any> // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -8,10 +9,11 @@ type Row = Record<string, any> // eslint-disable-line @typescript-eslint/no-expl
 const aBarbearia = (r: Row): Barbearia => ({
   id: r.id, nome: r.nome, endereco: r.endereco, cidade: r.cidade, bairro: r.bairro, descricao: r.descricao,
   lat: r.lat, lng: r.lng, fotoCapa: r.foto_capa ?? undefined, marca: r.marca,
+  telefone: r.telefone ?? undefined, whatsapp: r.whatsapp ?? undefined,
 })
 const aProfissional = (r: Row): Profissional => ({
   id: r.id, nome: r.nome, descricao: r.descricao, especialidades: r.especialidades, barbeariaId: r.barbearia_id,
-  emailAcesso: r.email_acesso ?? undefined, foto: r.foto ?? undefined,
+  foto: r.foto ?? undefined, jornada: r.jornada ?? undefined,
 })
 const aServico = (r: Row): Servico => ({
   id: r.id, barbeariaId: r.barbearia_id, nome: r.nome, descricao: r.descricao, preco: Number(r.preco),
@@ -22,9 +24,13 @@ const aHorario = (r: Row): Horario => ({
 })
 const aAgendamento = (r: Row): Agendamento => ({
   id: r.id, protocolo: r.protocolo, barbeariaId: r.barbearia_id, servicoId: r.servico_id, profissionalId: r.profissional_id,
-  horarioId: r.horario_id, clienteEmail: r.cliente_email, barbeiroEmail: r.barbeiro_email ?? undefined, inicio: r.inicio,
+  horarioId: r.horario_id, clienteEmail: r.cliente_email, clienteNome: r.cliente_nome ?? undefined, inicio: r.inicio,
   fim: r.fim, status: r.status, precoReservado: r.preco_reservado == null ? undefined : Number(r.preco_reservado),
   duracaoReservada: r.duracao_reservada ?? undefined, criadoEm: r.criado_em, atualizadoEm: r.atualizado_em,
+})
+const aAvaliacao = (r: Row): Avaliacao => ({
+  id: r.id, agendamentoId: r.agendamento_id, barbeariaId: r.barbearia_id, profissionalId: r.profissional_id,
+  clienteNome: r.cliente_nome, nota: r.nota, comentario: r.comentario, criadoEm: r.criado_em,
 })
 const aUsuario = (r: Row): Usuario => ({
   id: r.id, email: r.email, nome: r.nome, foto: r.foto ?? undefined, papel: r.papel,
@@ -43,12 +49,24 @@ const deUsuario = (p: Partial<Usuario>): Row => {
   return r
 }
 
-const vazio = (): Banco => ({ versao: 1, usuarios: [], barbearias: [], profissionais: [], servicos: [], horarios: [], agendamentos: [] })
+const vazio = (): Banco => ({ versao: 2, usuarios: [], barbearias: [], profissionais: [], servicos: [], horarios: [], agendamentos: [], avaliacoes: [] })
 
+const SEM_CONEXAO = 'Sem conexão com o servidor. Verifique sua internet.'
 function erro(e: { message?: string } | null): never {
   const m = e?.message ?? 'Algo deu errado.'
-  throw new Error(/fetch|network/i.test(m) ? 'Sem conexão com o servidor. Verifique sua internet.' : m)
+  throw new Error(/fetch|network|load failed/i.test(m) ? SEM_CONEXAO : m)
 }
+
+/** Tabelas do Banco que chegam por Realtime e como converter cada linha. */
+const TABELAS = {
+  barbearias: aBarbearia,
+  profissionais: aProfissional,
+  servicos: aServico,
+  horarios: aHorario,
+  agendamentos: aAgendamento,
+  avaliacoes: aAvaliacao,
+} as const
+type Tabela = keyof typeof TABELAS
 
 export function criarBackendSupabase(url: string, chave: string): Backend {
   const sb: SupabaseClient = createClient(url, chave, {
@@ -57,71 +75,122 @@ export function criarBackendSupabase(url: string, chave: string): Backend {
   let db = vazio()
   let email: string | null = null
   let pronto = false
+  let falha: string | undefined
   let ouvinte: ((e: Estado) => void) | null = null
   let timer: ReturnType<typeof setTimeout> | undefined
 
-  const emitir = () => ouvinte?.({ db, email, pronto })
+  const emitir = () => ouvinte?.({ db, email, pronto, erro: falha })
 
+  /** Troca ou insere linhas de uma tabela sem recarregar o resto. */
+  function aplicar<T extends Tabela>(t: T, linhas: Row[], remover: string[] = []) {
+    const conv = TABELAS[t] as (r: Row) => { id: string }
+    const novos = new Map(linhas.map((r) => [String(r.id), conv(r)]))
+    const atual = db[t] as { id: string }[]
+    const fora = new Set(remover)
+    const mantidos = atual.filter((x) => !fora.has(x.id)).map((x) => novos.get(x.id) ?? x)
+    const ids = new Set(atual.map((x) => x.id))
+    const inseridos = [...novos.values()].filter((x) => !ids.has(x.id))
+    db = { ...db, [t]: [...mantidos, ...inseridos] }
+    emitir()
+  }
+
+  // Carga completa: na abertura, ao entrar/sair e ao voltar para o app. O resto é incremental.
   async function recarregar() {
     const { data: s } = await sb.auth.getSession()
     const uid = s.session?.user.id
-    const desde = new Date(Date.now() - 45 * 864e5).toISOString()
-    const [b, p, sv, h, a, me] = await Promise.all([
-      sb.from('barbearias').select('*').order('nome'),
+    const ontem = new Date()
+    ontem.setHours(0, 0, 0, 0)
+    ontem.setDate(ontem.getDate() - 1)
+    const [b, p, sv, h, a, av, me] = await Promise.all([
+      sb.from('barbearias').select('*'),
       sb.from('profissionais').select('*'),
       sb.from('servicos').select('*'),
-      sb.from('horarios').select('*').gte('inicio', desde),
+      sb.from('horarios').select('*').gte('inicio', ontem.toISOString()),
       uid ? sb.from('agendamentos').select('*') : Promise.resolve({ data: [], error: null }),
+      sb.from('avaliacoes').select('*').order('criado_em', { ascending: false }).limit(500),
       uid ? sb.from('profiles').select('*').eq('id', uid).maybeSingle() : Promise.resolve({ data: null, error: null }),
     ])
-    const falha = [b, p, sv, h, a, me].find((x) => x.error)
-    if (falha?.error) erro(falha.error)
-    // Ordena o catálogo como no modo local (Procópio primeiro).
-    const barbearias = (b.data ?? []).map(aBarbearia).sort((x, y) => x.id.localeCompare(y.id))
+    const f = [b, p, sv, h, a, av, me].find((x) => x.error)
+    if (f?.error) erro(f.error)
     db = {
-      versao: 1,
-      barbearias,
+      versao: 2,
+      // Ordena o catálogo como no modo local (Procópio primeiro).
+      barbearias: (b.data ?? []).map(aBarbearia).sort((x, y) => x.id.localeCompare(y.id)),
       profissionais: (p.data ?? []).map(aProfissional),
       servicos: (sv.data ?? []).map(aServico),
       horarios: (h.data ?? []).map(aHorario),
       agendamentos: (a.data ?? []).map(aAgendamento),
+      avaliacoes: (av.data ?? []).map(aAvaliacao),
       usuarios: me.data ? [aUsuario(me.data)] : [],
     }
     email = me.data?.email ?? null
     pronto = true
+    falha = undefined
     emitir()
   }
-  const agendar = () => {
+  const recarregarSilencioso = () => {
     clearTimeout(timer)
-    timer = setTimeout(() => recarregar().catch(() => {}), 250)
+    timer = setTimeout(
+      () =>
+        recarregar().catch((e) => {
+          // Com dados na tela, uma falha de recarga não derruba o app.
+          if (!db.barbearias.length) {
+            falha = e instanceof Error ? e.message : SEM_CONEXAO
+            pronto = true
+            emitir()
+          }
+        }),
+      250,
+    )
+  }
+
+  async function buscar<T extends Tabela>(t: T, coluna: string, valores: string[]) {
+    if (!valores.length) return
+    const { data, error } = await sb.from(t).select('*').in(coluna, valores)
+    if (error) return // a mudança já foi feita; o Realtime ou a próxima carga corrigem a tela
+    aplicar(t, data ?? [])
   }
 
   const meuId = () => db.usuarios[0]?.id
+  const eu = () => db.usuarios[0]
 
   return {
     modo: 'supabase',
     iniciar(cb) {
       ouvinte = cb
-      recarregar().catch(() => {
+      recarregar().catch((e) => {
+        falha = e instanceof Error ? e.message : SEM_CONEXAO
         pronto = true
         emitir()
       })
       const { data: auth } = sb.auth.onAuthStateChange((ev) => {
-        if (ev === 'SIGNED_IN' || ev === 'SIGNED_OUT' || ev === 'USER_UPDATED') agendar()
+        if (ev === 'SIGNED_IN' || ev === 'SIGNED_OUT' || ev === 'USER_UPDATED') recarregarSilencioso()
       })
-      const canal = sb
-        .channel('barberhub')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'horarios' }, agendar)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'agendamentos' }, agendar)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'barbearias' }, agendar)
-        .subscribe()
-      const foco = () => document.visibilityState === 'visible' && agendar()
+      // Realtime: aplica só a linha que mudou, em vez de baixar o banco inteiro de novo.
+      let canal = sb.channel('barberhub')
+      for (const t of Object.keys(TABELAS) as Tabela[]) {
+        canal = canal.on('postgres_changes', { event: '*', schema: 'public', table: t }, (ev: RealtimePostgresChangesPayload<Row>) => {
+          if (ev.eventType === 'DELETE') aplicar(t, [], [String((ev.old as Row).id)])
+          else aplicar(t, [ev.new as Row])
+        })
+      }
+      canal.subscribe()
+      const foco = () => document.visibilityState === 'visible' && recarregarSilencioso()
       document.addEventListener('visibilitychange', foco)
       return () => {
         ouvinte = null
         auth.subscription.unsubscribe()
         sb.removeChannel(canal)
         document.removeEventListener('visibilitychange', foco)
+      }
+    },
+    async recarregar() {
+      try {
+        await recarregar()
+      } catch (e) {
+        falha = e instanceof Error ? e.message : SEM_CONEXAO
+        emitir()
+        throw e
       }
     },
     async entrar(e) {
@@ -144,45 +213,99 @@ export function criarBackendSupabase(url: string, chave: string): Backend {
     async atualizarUsuario(patch) {
       const id = meuId()
       if (!id) erro({ message: 'Entre na sua conta para continuar.' })
+      const antes = db.usuarios
       // Otimista: a tela responde na hora; o servidor confirma em seguida.
       db = { ...db, usuarios: db.usuarios.map((u) => ({ ...u, ...patch })) }
       emitir()
       const { error } = await sb.from('profiles').update(deUsuario(patch)).eq('id', id)
       if (error) {
-        agendar()
+        db = { ...db, usuarios: antes }
+        emitir()
         erro(error)
       }
     },
     async prepararHorarios(p, d) {
       const { error } = await sb.rpc('preparar_horarios', { p_profissional: p, p_dia: d })
       if (error) erro(error)
-      await recarregar()
+      const [y, m, dd] = d.split('-').map(Number)
+      const ini = new Date(y, m - 1, dd)
+      const fim = new Date(y, m - 1, dd + 1)
+      const { data, error: e2 } = await sb.from('horarios').select('*').eq('profissional_id', p).gte('inicio', ini.toISOString()).lt('inicio', fim.toISOString())
+      if (e2) return
+      const ids = new Set((data ?? []).map((r) => String(r.id)))
+      const sairam = db.horarios.filter((h) => h.profissionalId === p && new Date(h.inicio) >= ini && new Date(h.inicio) < fim && !ids.has(h.id)).map((h) => h.id)
+      aplicar('horarios', data ?? [], sairam)
     },
     async confirmar(h, s) {
       const { data, error } = await sb.rpc('confirmar_agendamento', { p_horario: h, p_servico: s })
       if (error) erro(error)
-      await recarregar()
+      aplicar('agendamentos', [data as Row])
+      await buscar('horarios', 'id', [h])
+      return aAgendamento(data as Row)
+    },
+    async remarcar(id, h) {
+      const antigo = db.agendamentos.find((a) => a.id === id)?.horarioId
+      const { data, error } = await sb.rpc('remarcar_agendamento', { p_id: id, p_horario: h })
+      if (error) erro(error)
+      aplicar('agendamentos', [data as Row])
+      await buscar('horarios', 'id', [h, ...(antigo ? [antigo] : [])])
       return aAgendamento(data as Row)
     },
     async cancelar(id) {
       const { error } = await sb.rpc('cancelar_agendamento', { p_id: id })
       if (error) erro(error)
-      await recarregar()
+      await buscar('agendamentos', 'id', [id])
+      const h = db.agendamentos.find((a) => a.id === id)?.horarioId
+      if (h) await buscar('horarios', 'id', [h])
     },
-    async finalizar(id) {
-      const { error } = await sb.rpc('finalizar_atendimento', { p_id: id })
+    async encerrar(id, resultado) {
+      const { error } = await sb.rpc('encerrar_atendimento', { p_id: id, p_resultado: resultado })
       if (error) erro(error)
-      await recarregar()
+      await buscar('agendamentos', 'id', [id])
     },
     async alternarBloqueio(id) {
       const { error } = await sb.rpc('alternar_bloqueio', { p_horario: id })
       if (error) erro(error)
-      await recarregar()
+      await buscar('horarios', 'id', [id])
+    },
+    async salvarJornada(j) {
+      const { error } = await sb.rpc('salvar_jornada', { p_jornada: j })
+      if (error) erro(error)
+      const p = eu()?.profissionalId
+      if (p) await buscar('profissionais', 'id', [p])
+    },
+    async salvarServico(s) {
+      const { data, error } = await sb.rpc('salvar_servico', { p_servico: s })
+      if (error) erro(error)
+      aplicar('servicos', [data as Row])
+      return aServico(data as Row)
+    },
+    async atualizarBarbearia(d) {
+      const { error } = await sb.rpc('atualizar_barbearia', { p_descricao: d.descricao, p_telefone: d.telefone ?? '', p_whatsapp: d.whatsapp ?? '' })
+      if (error) erro(error)
+      const b = eu()?.barbeariaId
+      if (b) await buscar('barbearias', 'id', [b])
+    },
+    async avaliar(id, nota, comentario) {
+      const { error } = await sb.rpc('avaliar_atendimento', { p_id: id, p_nota: nota, p_comentario: comentario })
+      if (error) erro(error)
+      await buscar('avaliacoes', 'agendamento_id', [id])
     },
     async atualizarFotoBarbearia(id, foto) {
       const { error } = await sb.rpc('atualizar_foto_barbearia', { p_barbearia: id, p_foto: foto ?? null })
       if (error) erro(error)
-      await recarregar()
+      await buscar('barbearias', 'id', [id])
+    },
+    async subirImagem(pasta, dataUrl) {
+      const u = eu()
+      if (!u) erro({ message: 'Entre na sua conta para continuar.' })
+      const dono = pasta === 'perfis' ? u.id : u.barbeariaId
+      if (!dono) erro({ message: 'Apenas o barbeiro vinculado pode alterar a foto.' })
+      const blob = await (await fetch(dataUrl)).blob()
+      const caminho = `${pasta}/${dono}/${uuid()}.jpg`
+      const { error } = await sb.storage.from('fotos').upload(caminho, blob, { contentType: 'image/jpeg', cacheControl: '31536000', upsert: false })
+      if (error) erro(error)
+      return sb.storage.from('fotos').getPublicUrl(caminho).data.publicUrl
     },
   }
 }

@@ -43,6 +43,15 @@ export const IEdit = (p: P) => (<svg {...base(p)}><path d="M4 20h4L19 9l-4-4L4 1
 export const IWallet = (p: P) => (<svg {...base(p)}><path d="M19 7V5.5A1.5 1.5 0 0 0 17.5 4h-12A1.5 1.5 0 0 0 4 5.5v13A1.5 1.5 0 0 0 5.5 20h13a1.5 1.5 0 0 0 1.5-1.5V15" /><path d="M20 10h-5a2 2 0 0 0 0 4h5v-4Z" /></svg>)
 
 // Ícones de serviço (cabelo, barba, combo, acabamento), no estilo dos ícones do Glide.
+export const IStar = ({ filled, ...p }: P & { filled?: boolean }) => (<svg {...base(p)} fill={filled ? 'currentColor' : 'none'}><path d="m12 3.5 2.6 5.4 5.9.8-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8L3.5 9.7l5.9-.8L12 3.5Z" /></svg>)
+export const IPhone = (p: P) => (<svg {...base(p)}><path d="M5 4h3.5l1.5 4-2 1.5a11 11 0 0 0 6.5 6.5l1.5-2 4 1.5V19a1 1 0 0 1-1 1A16 16 0 0 1 4 5a1 1 0 0 1 1-1Z" /></svg>)
+export const IChat = (p: P) => (<svg {...base(p)}><path d="M4 20l1.3-3.9A8 8 0 1 1 8 19l-4 1Z" /><path d="M9 10h.01M12 10h.01M15 10h.01" /></svg>)
+export const IRepeat = (p: P) => (<svg {...base(p)}><path d="M17 2l3 3-3 3" /><path d="M4 11V9a4 4 0 0 1 4-4h12M7 22l-3-3 3-3" /><path d="M20 13v2a4 4 0 0 1-4 4H4" /></svg>)
+export const IPlus = (p: P) => (<svg {...base(p)}><path d="M12 5v14M5 12h14" /></svg>)
+export const IWifiOff = (p: P) => (<svg {...base(p)}><path d="M3 3l18 18M8.5 16.5a5 5 0 0 1 7 0M5 13a10 10 0 0 1 5-2.7M19 13a10 10 0 0 0-2.4-1.7M2 9.5a15 15 0 0 1 4.3-2.6M22 9.5A15 15 0 0 0 11 5.1M12 20h.01" /></svg>)
+export const IChart = (p: P) => (<svg {...base(p)}><path d="M4 20V10M10 20V4M16 20v-7M22 20H2" /></svg>)
+export const IList = (p: P) => (<svg {...base(p)}><path d="M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01" /></svg>)
+
 export function IconeServico({ tipo, size = 28 }: { tipo: 'corte' | 'barba' | 'combo' | 'pezinho'; size?: number }) {
   const s = { width: size, height: size, viewBox: '0 0 32 32', 'aria-hidden': true }
   const face = <path d="M10 13v4.5a6 6 0 0 0 12 0V13" stroke="#fff" strokeWidth="2.2" fill="none" strokeLinecap="round" />

@@ -3,10 +3,13 @@ import { Button, Note, Page, TopBar } from '../components/ui'
 
 const PERGUNTAS = [
   ['Como agendo um horário?', 'Em Início, escolha uma barbearia, toque em um barbeiro, escolha o dia e um horário livre. Depois selecione o serviço e confirme.'],
-  ['Posso cancelar?', 'Sim. Abra a reserva em Agendamentos e toque em Cancelar. O horário volta a ficar livre e a reserva fica no seu Histórico.'],
+  ['Posso cancelar ou remarcar?', 'Sim, até 2h antes do horário. Abra a reserva em Agendamentos e toque em Remarcar ou Cancelar. Depois disso, fale com a barbearia pelo WhatsApp ou telefone da página da unidade.'],
+  ['Quantas reservas posso ter?', 'Até 3 reservas futuras ao mesmo tempo, sem horários que se sobreponham.'],
+  ['Como avalio o atendimento?', 'Depois que o barbeiro finalizar o atendimento, abra a reserva no Histórico e escolha de 1 a 5 estrelas.'],
+  ['Vou receber lembrete?', 'No app instalado, sim: 1h antes do horário. No navegador, use Adicionar ao calendário na reserva.'],
   ['Como pago?', 'O pagamento é feito no estabelecimento, depois do atendimento.'],
   ['Como funciona a distância?', 'Ligue a localização ou informe um endereço. Calculamos a distância em linha reta e mostramos as barbearias dentro do raio escolhido.'],
-  ['Sou barbeiro, onde vejo minha agenda?', 'No menu lateral ou no Perfil, toque em Área do barbeiro.'],
+  ['Sou barbeiro, onde vejo minha agenda?', 'No menu lateral ou no Perfil, toque em Área do barbeiro. Lá você define seus dias e horários, edita serviços e preços, e finaliza ou marca a falta de cada atendimento.'],
 ]
 
 export function Ajuda() {

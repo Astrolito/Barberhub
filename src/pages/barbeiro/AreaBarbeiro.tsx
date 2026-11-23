@@ -1,10 +1,12 @@
-import { useMemo, useRef, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useApp, useUsuario } from '../../state/AppContext'
-import { Button, Capa, Empty, Note, Page, Row, StatusLabel, TopBar, cx } from '../../components/ui'
-import { ICalendar, ICamera, IChevron, IClock, ILock, IScissors, IStore, IUnlock } from '../../components/Icons'
+import { Button, Campo, Capa, Empty, Note, Page, Row, Sheet, StatusLabel, Switch, TopBar, cx, inputCls } from '../../components/ui'
+import { ICalendar, ICamera, IChevron, IClock, IList, ILock, IPlus, IScissors, IStore, IUnlock, IconeServico } from '../../components/Icons'
 import { lerImagem } from '../../lib/image'
-import { dataHoraLonga, diaLocal, hora } from '../../lib/format'
+import { brlFull, dataHoraLonga, diaLocal, hora } from '../../lib/format'
+import { INTERVALOS_PERMITIDOS, aguardandoBarbeiro, iniciosDoDia, jornadaDe, resumoBarbeiro, resumoJornada, validarJornada, type ServicoEditavel } from '../../domain/rules'
+import type { IconeServico as TIcone, Jornada, Servico } from '../../domain/types'
 
 function useGuard() {
   const u = useUsuario()
@@ -22,29 +24,57 @@ function SemAcesso() {
   )
 }
 
+function Numero({ rotulo, valor, detalhe, destaque }: { rotulo: string; valor: string; detalhe?: string; destaque?: boolean }) {
+  return (
+    <div className={cx('rounded-2xl border p-3.5', destaque ? 'border-amber-400/40 bg-amber-400/10' : 'border-line bg-surface')}>
+      <div className="text-[12.5px] font-semibold uppercase tracking-wide text-faint">{rotulo}</div>
+      <div className="mt-1 text-[24px] font-bold tabular-nums leading-tight">{valor}</div>
+      {detalhe && <div className="text-[13px] text-muted">{detalhe}</div>}
+    </div>
+  )
+}
+
 export default function AreaBarbeiro() {
   const u = useGuard()
   const { db } = useApp()
   if (!u) return <SemAcesso />
-  const confirmados = db.agendamentos.filter((a) => a.profissionalId === u.profissionalId && a.status === 'Confirmado').length
+  const r = resumoBarbeiro(db, u.profissionalId!)
+  const prof = db.profissionais.find((p) => p.id === u.profissionalId)
   const cards = [
-    { to: '/barbeiro/barbearia', icon: <IStore />, title: 'Minha barbearia', text: 'Detalhes e foto da unidade' },
-    { to: '/barbeiro/atendimentos', icon: <ICalendar />, title: 'Atendimentos', text: confirmados ? `${confirmados} confirmado${confirmados > 1 ? 's' : ''}` : 'Nenhum pendente' },
+    { to: '/barbeiro/atendimentos', icon: <ICalendar />, title: 'Atendimentos', text: r.pendentes ? `${r.pendentes} aguardando você` : 'Próximos e histórico' },
     { to: '/barbeiro/horarios', icon: <IClock />, title: 'Meus horários', text: 'Bloquear e liberar intervalos' },
+    { to: '/barbeiro/agenda', icon: <ICalendar />, title: 'Minha agenda', text: resumoJornada(jornadaDe(prof)) },
+    { to: '/barbeiro/servicos', icon: <IList />, title: 'Serviços', text: 'Preços, duração e disponibilidade' },
+    { to: '/barbeiro/barbearia', icon: <IStore />, title: 'Minha barbearia', text: 'Foto, descrição e contato' },
   ]
   return (
     <>
       <TopBar title="Área do barbeiro" />
       <Page className="pt-3">
         <h1 className="text-[28px] font-bold tracking-tight">Área do barbeiro</h1>
-        <p className="mt-1 text-[15.5px] text-muted">{db.profissionais.find((p) => p.id === u.profissionalId)?.nome}</p>
+        <p className="mt-1 text-[15.5px] text-muted">{prof?.nome}</p>
+
+        <div className="mt-5 grid grid-cols-2 gap-2.5">
+          <Numero rotulo="Hoje" valor={String(r.hoje)} detalhe={`previsto ${brlFull(r.previstoHoje)}`} />
+          <Numero rotulo="Esta semana" valor={String(r.semana)} detalhe={`previsto ${brlFull(r.previstoSemana)}`} />
+          <Numero rotulo="Faturado no mês" valor={brlFull(r.faturadoMes)} detalhe={`${r.atendidosMes} atendido${r.atendidosMes === 1 ? '' : 's'}${r.faltasMes ? ` · ${r.faltasMes} falta${r.faltasMes > 1 ? 's' : ''}` : ''}`} />
+          <Numero rotulo="Sua nota" valor={r.nota ? r.nota.toFixed(1).replace('.', ',') : '—'} detalhe={r.totalNotas ? `${r.totalNotas} avaliaç${r.totalNotas > 1 ? 'ões' : 'ão'}` : 'Sem avaliações ainda'} />
+        </div>
+        {r.pendentes > 0 && (
+          <Link to="/barbeiro/atendimentos?aba=pendentes" className="press mt-2.5 flex items-center justify-between rounded-2xl border border-amber-400/40 bg-amber-400/10 p-3.5 text-[15px] font-medium text-amber-200">
+            {r.pendentes} atendimento{r.pendentes > 1 ? 's' : ''} para finalizar ou marcar falta
+            <IChevron size={18} />
+          </Link>
+        )}
+        <p className="mt-2 text-[12.5px] text-faint">Valores pelos preços reservados. Pagamento no estabelecimento.</p>
+
         <div className="mt-6 space-y-3">
           {cards.map((c, i) => (
-            <Link key={c.to} to={c.to} className="card-press animate-fade-up flex items-center gap-4 rounded-[20px] border border-line bg-surface p-4" style={{ animationDelay: `${i * 50}ms` }}>
+            <Link key={c.to} to={c.to} className="card-press animate-fade-up flex items-center gap-4 rounded-[20px] border border-line bg-surface p-4" style={{ animationDelay: `${i * 40}ms` }}>
               <span className="grid h-12 w-12 place-items-center rounded-2xl bg-brand-soft text-brand-ink">{c.icon}</span>
-              <span className="flex-1">
+              <span className="min-w-0 flex-1">
                 <span className="block text-[16.5px] font-semibold">{c.title}</span>
-                <span className="block text-[14px] text-muted">{c.text}</span>
+                <span className="block truncate text-[14px] text-muted">{c.text}</span>
               </span>
               <IChevron size={18} className="text-faint" />
             </Link>
@@ -55,26 +85,32 @@ export default function AreaBarbeiro() {
   )
 }
 
+const fone = (d?: string) => (!d ? '' : d.length === 11 ? `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}` : `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`)
+
 export function MinhaBarbearia() {
   const u = useGuard()
-  const { db, atualizarFotoBarbearia, toast } = useApp()
+  const { db, atualizarFotoBarbearia, atualizarBarbearia, toast } = useApp()
   const input = useRef<HTMLInputElement>(null)
-  if (!u) return <SemAcesso />
-  const b = db.barbearias.find((x) => x.id === u.barbeariaId)
-  if (!b) return <SemAcesso />
+  const b = db.barbearias.find((x) => x.id === u?.barbeariaId)
+  const [descricao, setDescricao] = useState(b?.descricao ?? '')
+  const [whatsapp, setWhatsapp] = useState(fone(b?.whatsapp))
+  const [telefone, setTelefone] = useState(fone(b?.telefone))
+  const [enviando, setEnviando] = useState<'foto' | 'dados' | null>(null)
+  if (!u || !b) return <SemAcesso />
   return (
     <>
       <TopBar title="Minha barbearia" />
       <Page className="pt-3">
         <div className="relative aspect-[16/10] overflow-hidden rounded-2xl border border-line">
           <Capa b={b} big />
+          {enviando === 'foto' && <div className="absolute inset-0 grid place-items-center bg-black/50 text-[15px] font-medium">Enviando…</div>}
         </div>
         <div className="mt-3 flex gap-2">
-          <Button size="md" variant="soft" icon={<ICamera size={19} />} onClick={() => input.current?.click()}>
+          <Button size="md" variant="soft" icon={<ICamera size={19} />} disabled={!!enviando} onClick={() => input.current?.click()}>
             {b.fotoCapa ? 'Trocar foto' : 'Enviar foto'}
           </Button>
           {b.fotoCapa && (
-            <Button size="md" variant="ghost" className="!w-auto" onClick={() => atualizarFotoBarbearia(b.id, undefined)}>
+            <Button size="md" variant="ghost" className="!w-auto" disabled={!!enviando} onClick={() => atualizarFotoBarbearia(b.id, undefined)}>
               Remover
             </Button>
           )}
@@ -86,18 +122,43 @@ export function MinhaBarbearia() {
           hidden
           onChange={async (e) => {
             const f = e.target.files?.[0]
+            e.target.value = ''
             if (!f) return
+            setEnviando('foto')
             try {
-              atualizarFotoBarbearia(b.id, await lerImagem(f))
+              await atualizarFotoBarbearia(b.id, await lerImagem(f))
             } catch (err) {
               toast((err as Error).message, 'erro')
             }
+            setEnviando(null)
           }}
         />
         <h1 className="mt-6 text-[24px] font-bold leading-tight">{b.nome}</h1>
         <p className="mt-2 text-[15px] leading-6 text-muted">{b.endereco}</p>
+
+        <form
+          onSubmit={async (e) => {
+            e.preventDefault()
+            setEnviando('dados')
+            await atualizarBarbearia({ descricao, whatsapp, telefone })
+            setEnviando(null)
+          }}
+        >
+          <Campo label="Descrição" dica="Aparece na página da unidade.">
+            <textarea value={descricao} onChange={(e) => setDescricao(e.target.value.slice(0, 400))} rows={3} className={cx(inputCls, 'h-auto resize-none py-3')} />
+          </Campo>
+          <Campo label="WhatsApp" dica="Com DDD. O cliente abre a conversa direto pelo app.">
+            <input value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)} inputMode="tel" placeholder="(92) 99999-9999" className={inputCls} />
+          </Campo>
+          <Campo label="Telefone">
+            <input value={telefone} onChange={(e) => setTelefone(e.target.value)} inputMode="tel" placeholder="(92) 3333-3333" className={inputCls} />
+          </Campo>
+          <Button className="mt-6" disabled={!!enviando}>
+            {enviando === 'dados' ? 'Salvando…' : 'Salvar dados da unidade'}
+          </Button>
+        </form>
         <div className="mt-5">
-          <Note>A foto aparece no catálogo, nos favoritos e na página da unidade.</Note>
+          <Note>A foto e o contato aparecem no catálogo e na página da unidade. O horário de atendimento vem da agenda de cada barbeiro.</Note>
         </div>
       </Page>
     </>
@@ -106,49 +167,74 @@ export function MinhaBarbearia() {
 
 export function Atendimentos() {
   const u = useGuard()
-  const { db, finalizar } = useApp()
+  const { db, encerrar } = useApp()
   const nav = useNavigate()
-  const [aba, setAba] = useState<'confirmados' | 'historico'>('confirmados')
-  const lista = useMemo(
-    () =>
-      u
-        ? db.agendamentos
-            .filter((a) => a.profissionalId === u.profissionalId)
-            .filter((a) => (aba === 'confirmados' ? a.status === 'Confirmado' : a.status === 'Finalizado' || a.status === 'Cancelado'))
-            .sort((a, b) => (aba === 'confirmados' ? a.inicio.localeCompare(b.inicio) : b.inicio.localeCompare(a.inicio)))
-        : [],
-    [db, u, aba],
-  )
+  const [params] = useSearchParams()
+  const inicial = params.get('aba')
+  const [aba, setAba] = useState<'proximos' | 'pendentes' | 'historico'>(inicial === 'pendentes' ? 'pendentes' : 'proximos')
+  const [enviando, setEnviando] = useState<string | null>(null)
+  const meus = useMemo(() => (u ? db.agendamentos.filter((a) => a.profissionalId === u.profissionalId) : []), [db, u])
+  const pendentes = meus.filter(aguardandoBarbeiro)
+  const lista = useMemo(() => {
+    if (aba === 'pendentes') return [...pendentes].sort((a, b) => a.inicio.localeCompare(b.inicio))
+    if (aba === 'proximos') return meus.filter((a) => a.status === 'Confirmado' && !aguardandoBarbeiro(a)).sort((a, b) => a.inicio.localeCompare(b.inicio))
+    return meus.filter((a) => a.status === 'Finalizado' || a.status === 'Cancelado' || a.status === 'Não compareceu').sort((a, b) => b.inicio.localeCompare(a.inicio))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [meus, aba])
   if (!u) return <SemAcesso />
   const nomeServ = (id: string) => db.servicos.find((s) => s.id === id)?.nome
+  const encerrarUm = async (id: string, r: 'Finalizado' | 'Não compareceu') => {
+    setEnviando(id)
+    await encerrar(id, r)
+    setEnviando(null)
+  }
   return (
     <>
       <TopBar title="Atendimentos" />
       <Page className="pt-3">
         <h1 className="text-[28px] font-bold tracking-tight">Atendimentos</h1>
-        <Segmented value={aba} onChange={setAba} options={[['confirmados', 'Confirmados'], ['historico', 'Histórico']]} />
+        <Segmented
+          value={aba}
+          onChange={setAba}
+          options={[
+            ['proximos', 'Próximos'],
+            ['pendentes', pendentes.length ? `Pendentes (${pendentes.length})` : 'Pendentes'],
+            ['historico', 'Histórico'],
+          ]}
+        />
+        {aba === 'pendentes' && lista.length > 0 && <p className="mt-3 text-[14px] text-muted">Horários que já começaram. Finalize ou registre a falta.</p>}
         {lista.length ? (
           <div className="mt-2">
             {lista.map((a) => (
               <div key={a.id} className="border-b border-line/70 py-3.5 last:border-0">
                 <button onClick={() => nav(`/agendamento/${a.id}`)} className="row-press block w-full text-left">
                   <div className="text-[12.5px] font-semibold">
-                    <StatusLabel s={a.status} />
+                    <StatusLabel s={a.status} aguardando={aguardandoBarbeiro(a)} />
                   </div>
-                  <div className="text-[16px] font-semibold">{nomeServ(a.servicoId)}</div>
+                  <div className="text-[16px] font-semibold">
+                    {a.clienteNome ?? 'Cliente'} · {nomeServ(a.servicoId)}
+                  </div>
                   <div className="text-[14.5px] text-muted">{dataHoraLonga(a.inicio)}</div>
-                  <div className="text-[13.5px] text-faint">Cliente: {a.clienteEmail}</div>
                 </button>
-                {a.status === 'Confirmado' && (
-                  <Button size="sm" className="mt-2.5" onClick={() => finalizar(a.id)}>
-                    Finalizar
-                  </Button>
+                {aguardandoBarbeiro(a) && (
+                  <div className="mt-2.5 flex gap-2">
+                    <Button size="sm" disabled={enviando === a.id} onClick={() => encerrarUm(a.id, 'Finalizado')}>
+                      Finalizar
+                    </Button>
+                    <Button size="sm" variant="ghost" disabled={enviando === a.id} onClick={() => encerrarUm(a.id, 'Não compareceu')}>
+                      Não compareceu
+                    </Button>
+                  </div>
                 )}
               </div>
             ))}
           </div>
         ) : (
-          <Empty icon={<ICalendar />} title={aba === 'confirmados' ? 'Nenhum atendimento confirmado' : 'Sem histórico'} text="As reservas atribuídas a você aparecem aqui." />
+          <Empty
+            icon={<ICalendar />}
+            title={aba === 'proximos' ? 'Nenhum atendimento marcado' : aba === 'pendentes' ? 'Tudo em dia' : 'Sem histórico'}
+            text={aba === 'pendentes' ? 'Nenhum atendimento esperando finalização.' : 'As reservas atribuídas a você aparecem aqui.'}
+          />
         )}
       </Page>
     </>
@@ -159,6 +245,11 @@ export function MeusHorarios() {
   const u = useGuard()
   const { db, alternarBloqueio, prepararHorarios } = useApp()
   const [dia, setDia] = useState(diaLocal())
+  const prof = db.profissionais.find((p) => p.id === u?.profissionalId)
+  useEffect(() => {
+    if (u?.profissionalId) prepararHorarios(u.profissionalId, dia)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [u?.profissionalId, dia, prof?.jornada])
   if (!u) return <SemAcesso />
   const lista = db.horarios
     .filter((h) => h.profissionalId === u.profissionalId && diaLocal(new Date(h.inicio)) === dia)
@@ -168,19 +259,20 @@ export function MeusHorarios() {
       <TopBar title="Meus horários" />
       <Page className="pt-3">
         <h1 className="text-[28px] font-bold tracking-tight">Meus horários</h1>
-        <p className="mt-1 text-[15px] text-muted">Intervalos de 90 minutos às 10h e às 14h.</p>
-        <div className="mt-5 flex gap-2">
-          <input
-            type="date"
-            min={diaLocal()}
-            value={dia}
-            onChange={(e) => e.target.value && setDia(e.target.value)}
-            className="h-12 flex-1 rounded-xl border border-line bg-surface2 px-3.5 text-[16px] [color-scheme:dark] focus:border-brand focus:outline-none"
-          />
-          <Button size="md" className="!w-auto" onClick={() => prepararHorarios(u.profissionalId!, dia)}>
-            Buscar horários
-          </Button>
-        </div>
+        <p className="mt-1 text-[15px] text-muted">
+          {resumoJornada(jornadaDe(prof))}.{' '}
+          <Link to="/barbeiro/agenda" className="font-semibold text-brand-ink">
+            Alterar agenda
+          </Link>
+        </p>
+        <input
+          type="date"
+          min={diaLocal()}
+          value={dia}
+          onChange={(e) => e.target.value && setDia(e.target.value)}
+          className={cx(inputCls, 'mt-5')}
+          aria-label="Dia"
+        />
         {lista.length ? (
           <div className="mt-3">
             {lista.map((h) => {
@@ -211,9 +303,228 @@ export function MeusHorarios() {
             })}
           </div>
         ) : (
-          <Empty icon={<IClock />} title="Nenhum intervalo neste dia" text="Toque em Buscar horários para preparar os intervalos do dia." />
+          <Empty icon={<IClock />} title="Nenhum intervalo neste dia" text="Você não atende neste dia ou os horários já passaram. Ajuste em Minha agenda." />
         )}
       </Page>
+    </>
+  )
+}
+
+const DIAS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
+
+/** Agenda configurável: dias, expediente e duração de cada intervalo. */
+export function MinhaAgenda() {
+  const u = useGuard()
+  const { db, salvarJornada } = useApp()
+  const nav = useNavigate()
+  const prof = db.profissionais.find((p) => p.id === u?.profissionalId)
+  const [j, setJ] = useState<Jornada>(jornadaDe(prof))
+  const [enviando, setEnviando] = useState(false)
+  const erro = useMemo(() => {
+    try {
+      validarJornada(j)
+      return null
+    } catch (e) {
+      return (e as Error).message
+    }
+  }, [j])
+  // Prévia de um dia atendido (segunda-feira de referência).
+  const previa = useMemo(() => (erro ? [] : iniciosDoDia({ ...j, dias: [1] }, '2026-11-23')), [j, erro])
+  if (!u) return <SemAcesso />
+  return (
+    <>
+      <TopBar title="Minha agenda" />
+      <Page className="pt-3">
+        <h1 className="text-[28px] font-bold tracking-tight">Minha agenda</h1>
+        <p className="mt-1 text-[15px] text-muted">Defina quando você atende. Os clientes só veem horários dentro desta agenda.</p>
+
+        <h2 className="mt-6 text-[15px] font-semibold">Dias de atendimento</h2>
+        <div className="mt-2 grid grid-cols-7 gap-1.5">
+          {DIAS.map((nome, d) => {
+            const on = j.dias.includes(d)
+            return (
+              <button
+                key={d}
+                type="button"
+                aria-pressed={on}
+                onClick={() => setJ({ ...j, dias: on ? j.dias.filter((x) => x !== d) : [...j.dias, d].sort() })}
+                className={cx('press h-11 rounded-xl border text-[13.5px] font-semibold', on ? 'border-brand bg-brand text-white' : 'border-line bg-surface text-muted')}
+              >
+                {nome}
+              </button>
+            )
+          })}
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <Campo label="Começa às">
+            <input type="time" step={900} value={j.inicio} onChange={(e) => e.target.value && setJ({ ...j, inicio: e.target.value })} className={inputCls} />
+          </Campo>
+          <Campo label="Último termina até">
+            <input type="time" step={900} value={j.fim} onChange={(e) => e.target.value && setJ({ ...j, fim: e.target.value })} className={inputCls} />
+          </Campo>
+        </div>
+        <Campo label="Duração de cada horário" dica="Serviços mais longos que isso não aparecem para reserva.">
+          <select value={j.intervaloMin} onChange={(e) => setJ({ ...j, intervaloMin: Number(e.target.value) })} className={cx(inputCls, 'appearance-none')}>
+            {INTERVALOS_PERMITIDOS.map((m) => (
+              <option key={m} value={m}>
+                {m < 60 ? `${m} min` : m % 60 ? `${Math.floor(m / 60)}h${m % 60}` : `${m / 60}h`}
+              </option>
+            ))}
+          </select>
+        </Campo>
+
+        <h2 className="mt-6 text-[15px] font-semibold">Horários de cada dia</h2>
+        {erro ? (
+          <p className="mt-2 text-[14.5px] text-danger">{erro}</p>
+        ) : (
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {previa.map((h) => (
+              <span key={h} className="rounded-lg bg-surface2 px-2.5 py-1.5 text-[14px] font-semibold tabular-nums text-brand-ink">
+                {h}
+              </span>
+            ))}
+          </div>
+        )}
+        <p className="mt-3 text-[13.5px] text-faint">Reservas já confirmadas e horários bloqueados não mudam.</p>
+
+        <Button
+          className="mt-6"
+          disabled={!!erro || enviando}
+          onClick={async () => {
+            setEnviando(true)
+            const ok = await salvarJornada(j)
+            setEnviando(false)
+            if (ok) nav('/barbeiro/horarios')
+          }}
+        >
+          {enviando ? 'Salvando…' : 'Salvar agenda'}
+        </Button>
+      </Page>
+    </>
+  )
+}
+
+const ICONES: [TIcone, string][] = [
+  ['corte', 'Corte'],
+  ['barba', 'Barba'],
+  ['combo', 'Combo'],
+  ['pezinho', 'Acabamento'],
+]
+const novoServico = (): ServicoEditavel => ({ nome: '', descricao: '', preco: 0, duracaoMinutos: 30, categoria: '', inclui: '', disponivel: true, icone: 'corte' })
+
+/** Serviços da unidade: o barbeiro cria, edita e pausa. */
+export function Servicos() {
+  const u = useGuard()
+  const { db, salvarServico } = useApp()
+  const [editando, setEditando] = useState<ServicoEditavel | null>(null)
+  const [enviando, setEnviando] = useState(false)
+  if (!u) return <SemAcesso />
+  const lista = db.servicos.filter((s) => s.barbeariaId === u.barbeariaId).sort((a, b) => Number(b.disponivel) - Number(a.disponivel) || a.nome.localeCompare(b.nome))
+  const prof = db.profissionais.find((p) => p.id === u.profissionalId)
+  const intervalo = jornadaDe(prof).intervaloMin
+  const editar = (s: Servico) => setEditando({ id: s.id, nome: s.nome, descricao: s.descricao, preco: s.preco, duracaoMinutos: s.duracaoMinutos, categoria: s.categoria, inclui: s.inclui, disponivel: s.disponivel, icone: s.icone })
+
+  return (
+    <>
+      <TopBar title="Serviços" right={<Button size="sm" variant="soft" icon={<IPlus size={16} />} onClick={() => setEditando(novoServico())}>Novo</Button>} />
+      <Page className="pt-3">
+        <h1 className="text-[28px] font-bold tracking-tight">Serviços</h1>
+        <p className="mt-1 text-[15px] text-muted">Valem para todos os barbeiros da unidade. Reservas feitas mantêm o preço da época.</p>
+        <div className="mt-3">
+          {lista.map((s) => (
+            <Row
+              key={s.id}
+              onClick={() => editar(s)}
+              leading={
+                <span className={cx('grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-brand-soft', !s.disponivel && 'opacity-40')}>
+                  <IconeServico tipo={s.icone} size={30} />
+                </span>
+              }
+              overline={s.disponivel ? <span className="tabular-nums">{brlFull(s.preco)}</span> : <span className="text-faint">PAUSADO</span>}
+              title={s.nome}
+              subtitle={
+                <>
+                  {s.duracaoMinutos} min
+                  {s.duracaoMinutos > intervalo && <span className="block text-[13px] text-amber-400">Maior que seu intervalo de {intervalo} min: não aparece na sua agenda</span>}
+                </>
+              }
+            />
+          ))}
+        </div>
+        {!lista.length && <Empty icon={<IList />} title="Nenhum serviço" text="Crie o primeiro serviço para abrir a agenda aos clientes." />}
+      </Page>
+
+      <Sheet open={!!editando} onClose={() => setEditando(null)} title={editando?.id ? 'Editar serviço' : 'Novo serviço'}>
+        {editando && (
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault()
+              setEnviando(true)
+              const r = await salvarServico(editando)
+              setEnviando(false)
+              if (r) setEditando(null)
+            }}
+          >
+            <Campo label="Nome">
+              <input value={editando.nome} onChange={(e) => setEditando({ ...editando, nome: e.target.value })} maxLength={60} className={inputCls} placeholder="Corte masculino" />
+            </Campo>
+            <div className="grid grid-cols-2 gap-3">
+              <Campo label="Preço (R$)">
+                <input
+                  inputMode="decimal"
+                  value={String(editando.preco).replace('.', ',')}
+                  onChange={(e) => setEditando({ ...editando, preco: Number(e.target.value.replace(/[^\d,]/g, '').replace(',', '.')) || 0 })}
+                  className={inputCls}
+                />
+              </Campo>
+              <Campo label="Duração (min)">
+                <input
+                  type="number"
+                  min={5}
+                  max={240}
+                  step={5}
+                  value={editando.duracaoMinutos}
+                  onChange={(e) => setEditando({ ...editando, duracaoMinutos: Math.round(Number(e.target.value)) || 0 })}
+                  className={inputCls}
+                />
+              </Campo>
+            </div>
+            <Campo label="Descrição">
+              <input value={editando.descricao} onChange={(e) => setEditando({ ...editando, descricao: e.target.value })} maxLength={200} className={inputCls} />
+            </Campo>
+            <Campo label="Inclui">
+              <input value={editando.inclui} onChange={(e) => setEditando({ ...editando, inclui: e.target.value })} maxLength={120} className={inputCls} placeholder="Shampoo, finalizador" />
+            </Campo>
+            <Campo label="Ícone">
+              <div className="grid grid-cols-4 gap-2">
+                {ICONES.map(([ic, nome]) => (
+                  <button
+                    key={ic}
+                    type="button"
+                    aria-pressed={editando.icone === ic}
+                    onClick={() => setEditando({ ...editando, icone: ic, categoria: editando.categoria || nome })}
+                    className={cx('press flex flex-col items-center gap-1 rounded-xl border py-2 text-[12px]', editando.icone === ic ? 'border-brand bg-brand/10' : 'border-line bg-surface2/60')}
+                  >
+                    <IconeServico tipo={ic} size={28} />
+                    {nome}
+                  </button>
+                ))}
+              </div>
+            </Campo>
+            <div className="mt-5 flex items-center justify-between rounded-xl bg-surface2/70 px-4 py-3">
+              <span>
+                <span className="block text-[15px] font-semibold">Disponível para reserva</span>
+                <span className="block text-[13px] text-muted">Desligue para pausar sem apagar.</span>
+              </span>
+              <Switch checked={editando.disponivel} onChange={(v) => setEditando({ ...editando, disponivel: v })} label="Disponível" />
+            </div>
+            <Button className="mt-6" disabled={enviando}>
+              {enviando ? 'Salvando…' : 'Salvar serviço'}
+            </Button>
+          </form>
+        )}
+      </Sheet>
     </>
   )
 }
@@ -227,10 +538,11 @@ function Segmented<T extends string>({ value, onChange, options }: { value: T; o
         style={{ width: `calc((100% - 8px) / ${options.length})`, transform: `translateX(calc(${idx * 100}%))`, left: 4 }}
       />
       {options.map(([v, l]) => (
-        <button key={v} onClick={() => onChange(v)} className={cx('relative z-10 text-[14.5px] font-semibold transition-colors', v === value ? 'text-ink' : 'text-muted')}>
+        <button key={v} onClick={() => onChange(v)} className={cx('relative z-10 text-[14px] font-semibold transition-colors', v === value ? 'text-ink' : 'text-muted')}>
           {l}
         </button>
       ))}
     </div>
   )
 }
+

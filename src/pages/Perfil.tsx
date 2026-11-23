@@ -86,6 +86,7 @@ export function MeusDados() {
   const nav = useNavigate()
   const [nome, setNome] = useState(u.nome)
   const [foto, setFoto] = useState(u.foto)
+  const [salvando, setSalvando] = useState(false)
   const input = useRef<HTMLInputElement>(null)
   return (
     <>
@@ -129,14 +130,19 @@ export function MeusDados() {
         <p className="mt-2 text-[13.5px] text-faint">E-mail, papel e vínculos profissionais não podem ser alterados aqui.</p>
         <Button
           className="mt-7"
-          disabled={!nome.trim()}
+          disabled={!nome.trim() || salvando}
           onClick={async () => {
-            await atualizarUsuario({ nome: nome.trim(), foto })
-            toast('Dados atualizados.')
-            nav(-1)
+            setSalvando(true)
+            const ok = await atualizarUsuario({ nome: nome.trim(), foto })
+            setSalvando(false)
+            // Só confirma e volta quando salvou de verdade; a falha já mostra o motivo.
+            if (ok) {
+              toast('Dados atualizados.')
+              nav(-1)
+            }
           }}
         >
-          Salvar
+          {salvando ? 'Salvando…' : 'Salvar'}
         </Button>
       </Page>
     </>

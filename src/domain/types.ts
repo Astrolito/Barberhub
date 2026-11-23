@@ -41,6 +41,9 @@ export interface Barbearia {
   lng: number
   /** Foto enviada pelo barbeiro vinculado (data URL). */
   fotoCapa?: string
+  /** Contato público, preenchido pelo barbeiro vinculado. */
+  telefone?: string
+  whatsapp?: string
   /** Identidade visual de espera quando não há foto. */
   marca: { sigla: string; cor: string; fundo: string; fonte?: 'serif' | 'sans' | 'script' }
 }
@@ -53,6 +56,20 @@ export interface Profissional {
   barbeariaId: string
   emailAcesso?: string
   foto?: string
+  /** Dias e horários em que atende. Vazio = jornada padrão. */
+  jornada?: Jornada
+}
+
+/** Agenda configurável do profissional. */
+export interface Jornada {
+  /** Dias da semana atendidos (0 = domingo … 6 = sábado). */
+  dias: number[]
+  /** Primeiro horário do dia, "HH:MM". */
+  inicio: string
+  /** Hora em que o último atendimento precisa terminar, "HH:MM". */
+  fim: string
+  /** Duração de cada intervalo reservável, em minutos. */
+  intervaloMin: number
 }
 
 export type IconeServico = 'corte' | 'barba' | 'combo' | 'pezinho'
@@ -81,7 +98,8 @@ export interface Horario {
   status: StatusHorario
 }
 
-export type StatusAgendamento = 'Confirmado' | 'Indisponível' | 'Cancelado' | 'Finalizado'
+// 'Indisponível' fica só por compatibilidade com dados antigos: tentativas recusadas não são mais gravadas.
+export type StatusAgendamento = 'Confirmado' | 'Indisponível' | 'Cancelado' | 'Finalizado' | 'Não compareceu'
 
 export interface Agendamento {
   id: string
@@ -91,7 +109,8 @@ export interface Agendamento {
   profissionalId: string
   horarioId: string
   clienteEmail: string
-  barbeiroEmail?: string
+  /** Nome do cliente no momento da reserva (o barbeiro não lê o perfil do cliente). */
+  clienteNome?: string
   inicio: string
   fim: string
   status: StatusAgendamento
@@ -99,6 +118,18 @@ export interface Agendamento {
   duracaoReservada?: number
   criadoEm: string
   atualizadoEm: string
+}
+
+export interface Avaliacao {
+  id: string
+  agendamentoId: string
+  barbeariaId: string
+  profissionalId: string
+  /** Primeiro nome de quem avaliou. */
+  clienteNome: string
+  nota: number
+  comentario: string
+  criadoEm: string
 }
 
 export interface OpcaoDistancia {
@@ -114,4 +145,5 @@ export interface Banco {
   servicos: Servico[]
   horarios: Horario[]
   agendamentos: Agendamento[]
+  avaliacoes: Avaliacao[]
 }

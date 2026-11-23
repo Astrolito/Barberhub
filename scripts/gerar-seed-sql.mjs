@@ -15,7 +15,10 @@ const linhas = ['-- Gerado por scripts/gerar-seed-sql.mjs. Não edite à mão.',
 for (const b of db.barbearias)
   linhas.push(`insert into public.barbearias (id,nome,endereco,cidade,bairro,descricao,lat,lng,marca) values (${[b.id, b.nome, b.endereco, b.cidade, b.bairro, b.descricao, b.lat, b.lng].map(q).join(',')},${q(JSON.stringify(b.marca))}::jsonb) on conflict (id) do nothing;`)
 for (const p of db.profissionais)
-  linhas.push(`insert into public.profissionais (id,nome,descricao,especialidades,barbearia_id,email_acesso) values (${[p.id, p.nome, p.descricao, p.especialidades, p.barbeariaId, p.emailAcesso].map(q).join(',')}) on conflict (id) do nothing;`)
+  linhas.push(`insert into public.profissionais (id,nome,descricao,especialidades,barbearia_id) values (${[p.id, p.nome, p.descricao, p.especialidades, p.barbeariaId].map(q).join(',')}) on conflict (id) do nothing;`)
+// E-mail de acesso fica numa tabela sem leitura pública.
+for (const p of db.profissionais.filter((x) => x.emailAcesso))
+  linhas.push(`insert into public.acessos_profissionais (email,profissional_id) values (${[p.emailAcesso.toLowerCase(), p.id].map(q).join(',')}) on conflict do nothing;`)
 for (const s of db.servicos)
   linhas.push(`insert into public.servicos (id,barbearia_id,nome,descricao,preco,duracao_minutos,categoria,inclui,disponivel,icone) values (${[s.id, s.barbeariaId, s.nome, s.descricao, s.preco, s.duracaoMinutos, s.categoria, s.inclui, s.disponivel, s.icone].map(q).join(',')}) on conflict (id) do nothing;`)
 writeFileSync('supabase/seed.sql', linhas.join('\n') + '\n')
