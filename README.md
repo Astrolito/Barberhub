@@ -10,6 +10,7 @@ npm run dev          # http://localhost:5173
 npm run build        # gera dist/ (web e Capacitor)
 npm run build:single # gera dist-single/index.html, um arquivo único para prévia
 npm run dev:https    # https na rede local, para testar o GPS no celular/tablet
+npm test             # testes das regras de agendamento (também rodam no GitHub a cada PR)
 ```
 
 Localização: o navegador só libera o GPS em `https` (ou `localhost`). Para testar no tablet pelo PC, use `npm run dev:https`, abra o endereço `https://IP-do-PC:5173` no tablet e aceite o aviso de certificado. Na prévia publicada no claude.ai o GPS fica bloqueado; use o bairro ou o endereço.
@@ -32,14 +33,14 @@ O app tem dois modos, escolhidos pelas variáveis de ambiente (veja `.env.exampl
 
 ### Supabase
 
-1. Crie um projeto e rode, no SQL Editor, `supabase/migrations/20261114000000_init.sql` e depois `supabase/seed.sql` (ou `supabase db push` com a CLI).
+1. Crie um projeto e rode, no SQL Editor, os arquivos de `supabase/migrations/` em ordem e depois `supabase/seed.sql` (ou `supabase db push` com a CLI).
 2. Em **Authentication > URL Configuration**, defina o *Site URL* como o domínio da Vercel e adicione-o em *Redirect URLs*.
 3. Em **Authentication > Email Templates > Magic Link**, inclua `{{ .Token }}` no texto para o e-mail trazer também o código de 6 dígitos (necessário no app instalado).
-4. Para ter acesso de barbeiro, troque o e-mail de acesso do profissional antes do primeiro login:
-   `update profissionais set email_acesso = 'seu@email.com' where id = 'prof-001';`
+4. Para ter acesso de barbeiro, cadastre o e-mail do profissional antes do primeiro login (a tabela não é lida pela API pública):
+   `insert into acessos_profissionais (email, profissional_id) values ('seu@email.com', 'prof-001') on conflict (profissional_id) do update set email = excluded.email;`
    Quem entrar com esse e-mail vira Barbeiro vinculado à Procópio.
 
-Segurança: catálogo e horários são públicos para leitura; cada pessoa só lê o próprio perfil e as reservas em que é cliente ou barbeiro (RLS). Horários, reservas e capa só mudam pelas funções SQL (`confirmar_agendamento`, `cancelar_agendamento`, `finalizar_atendimento`, `alternar_bloqueio`, `preparar_horarios`, `atualizar_foto_barbearia`), que travam a linha e aplicam as regras no mesmo commit. Um índice único impede duas reservas confirmadas no mesmo horário.
+Segurança: catálogo e horários são públicos para leitura; cada pessoa só lê o próprio perfil e as reservas em que é cliente ou barbeiro (RLS). Horários, reservas, avaliações, serviços e dados da unidade só mudam pelas funções SQL (`confirmar_agendamento`, `remarcar_agendamento`, `cancelar_agendamento`, `encerrar_atendimento`, `avaliar_atendimento`, `alternar_bloqueio`, `preparar_horarios`, `salvar_jornada`, `salvar_servico`, `atualizar_barbearia`, `atualizar_foto_barbearia`), que travam a linha e aplicam as regras no mesmo commit. Um índice único impede duas reservas confirmadas no mesmo horário. Fotos ficam no bucket público `fotos` do Storage (`perfis/<id do usuário>/` e `barbearias/<id da unidade>/`, cada um só grava na própria pasta). Os limites (2h para cancelar/remarcar, 3 reservas futuras) estão em `src/domain/rules.ts` e na migração `20261123000000_melhorias.sql`; mude nos dois.
 
 Se mudar `src/data/seed.ts`, gere o SQL de novo com `node scripts/gerar-seed-sql.mjs`.
 
@@ -51,7 +52,7 @@ Importe o repositório em vercel.com/new. O `vercel.json` já define o build (`n
 
 O app roda dentro de um webview nativo com Capacitor. A configuração está em `capacitor.config.ts` (`appId: br.com.barberhub.app`).
 
-O projeto Android já está em `android/`, com as permissões de localização. No app nativo o GPS usa o plugin `@capacitor/geolocation`, que pede a permissão do sistema.
+O projeto Android já está em `android/`, com as permissões de localização e de notificação. No app nativo o GPS usa o plugin `@capacitor/geolocation`, e o lembrete 1h antes de cada reserva usa `@capacitor/local-notifications` (pede a permissão na primeira reserva).
 
 ```bash
 npm run android       # build + sync + abre o Android Studio (depois: Run ▶)
@@ -85,7 +86,8 @@ src/
 
 ### Máquinas de estado (UML 03)
 
-- Agendamento: envio → `Confirmado` (se horário Livre e futuro) ou `Indisponível`; `Confirmado` → `Cancelado` (cliente titular, horário volta a Livre) ou `Finalizado` (barbeiro atribuído, horário continua Ocupado).
+- Agendamento: envio → `Confirmado` (horário Livre e futuro, serviço cabe no intervalo, cliente com menos de 3 reservas futuras e sem outra no mesmo horário; senão o envio é recusado e nada é gravado). `Confirmado` → `Cancelado` ou remarcado (cliente titular, até 2h antes; o horário antigo volta a Livre) ou, depois do início, `Finalizado` / `Não compareceu` (barbeiro atribuído; o horário continua Ocupado). `Finalizado` pode receber uma avaliação de 1 a 5 do titular.
+- Agenda: cada profissional define dias, início, fim e duração do intervalo (padrão Seg a Sáb, 10:00 às 17:30, 90 min). Ao preparar um dia, faltantes são criados e livres fora da agenda saem (ou ficam Bloqueados se já tiveram reserva).
 - Horário: `Livre` ↔ `Bloqueado` (barbeiro do intervalo); `Livre` → `Ocupado` (confirmação); `Ocupado` → `Livre` (cancelamento).
 
 ## Melhorias em relação ao Glide
@@ -99,6 +101,13 @@ src/
 - Catálogo ordenado pela distância, com o km em cada capa, e mensagem vazia com atalho para "Sem limite".
 - Busca por endereço com geocodificação (OpenStreetMap) e fallback por bairro de Manaus.
 - Interações no estilo Emil Kowalski: feedback de pressão, bottom sheet arrastável, toasts, transições curtas com ease-out, respeito a `prefers-reduced-motion`.
+
+## Melhorias de 23/11/2026
+
+- Regras: prazo de 2h para cancelar/remarcar, limite de 3 reservas futuras, sem reservas sobrepostas, finalizar só depois do início, status `Não compareceu`, tentativas recusadas não viram registro.
+- Cliente: remarcar (inclusive trocando de barbeiro), Google Agenda / .ics, lembrete no app instalado, avaliações com nota no catálogo, agendar a partir do serviço, WhatsApp/telefone e horário de atendimento na página da unidade.
+- Barbeiro: agenda configurável, painel (dia, semana, faturado no mês, nota, pendentes), serviços editáveis, descrição e contato da unidade, nome do cliente nos atendimentos.
+- Segurança e desempenho: e-mail de acesso fora da API pública, fotos no Storage, Realtime aplica só a linha alterada, tela de erro e aviso sem internet, testes automáticos e CI.
 
 ## Limites conhecidos
 
