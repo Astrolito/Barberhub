@@ -27,6 +27,7 @@ export const ICheck = (p: P) => (<svg {...base(p)}><path d="m5 12.5 4.5 4.5L19 7
 export const IPin = (p: P) => (<svg {...base(p)}><path d="M12 21s-7-6.2-7-12a7 7 0 0 1 14 0c0 5.8-7 12-7 12Z" /><circle cx="12" cy="9" r="2.5" /></svg>)
 export const ILocate = (p: P) => (<svg {...base(p)}><circle cx="12" cy="12" r="7" /><circle cx="12" cy="12" r="2.5" /><path d="M12 2v3M12 19v3M2 12h3M19 12h3" /></svg>)
 export const ILocateOff = (p: P) => (<svg {...base(p)}><path d="M12 2v3M12 19v3M2 12h3M19 12h3M7.1 7.1A7 7 0 0 0 16.9 16.9M9.5 5.4A7 7 0 0 1 18.6 14.5M3 3l18 18" /></svg>)
+export const IMap = (p: P) => (<svg {...base(p)}><path d="M9 4 3.5 6v14L9 18l6 2 5.5-2V4L15 6 9 4Z" /><path d="M9 4v14M15 6v14" /></svg>)
 export const IClock = (p: P) => (<svg {...base(p)}><circle cx="12" cy="12" r="8.5" /><path d="M12 7.5V12l3 2" /></svg>)
 export const ICard = (p: P) => (<svg {...base(p)}><rect x="2.5" y="5" width="19" height="14" rx="2.5" /><path d="M2.5 10h19M6.5 15h3" /></svg>)
 export const IHistory = (p: P) => (<svg {...base(p)}><path d="M3 12a9 9 0 1 0 3-6.7L3 8" /><path d="M3 3v5h5M12 7.5V12l3 2" /></svg>)

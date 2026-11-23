@@ -37,3 +37,21 @@
   *, *::before, *::after { animation-duration: 1ms !important; transition-duration: 1ms !important; }
   .press:active, .card-press:active { transform: none; }
 }
+
+/* Mapa (Leaflet) no tema escuro do app. */
+.bh-mapa { background: #0e0e11; font-family: inherit; }
+.bh-mapa .leaflet-control-attribution { background: rgba(9, 9, 11, 0.7); color: #71717a; font-size: 10px; }
+.bh-mapa .leaflet-control-attribution a { color: #a1a1aa; }
+.bh-pin {
+  position: relative; display: grid; place-items: center; width: 40px; height: 40px; margin: 2px;
+  border-radius: 50% 50% 50% 6px; transform: rotate(-45deg); background: #1d6fe0; color: #fff;
+  border: 2px solid #f4f4f5; box-shadow: 0 6px 16px -4px rgba(0, 0, 0, 0.7);
+  transition: transform 200ms cubic-bezier(0.23, 1, 0.32, 1), border-color 150ms ease-out;
+}
+.bh-pin span { display: grid; transform: rotate(45deg); }
+.bh-pin--ativo { background: #fff; color: #1d6fe0; border-color: #1d6fe0; transform: rotate(-45deg) scale(1.15); }
+.bh-eu {
+  width: 18px; height: 18px; margin: 2px; border-radius: 9999px; background: #1d6fe0; border: 3px solid #fff;
+  box-shadow: 0 0 0 0 rgba(29, 111, 224, 0.6); animation: bh-pulso 2s ease-out infinite;
+}
+@keyframes bh-pulso { 0% { box-shadow: 0 0 0 0 rgba(29, 111, 224, 0.55); } 100% { box-shadow: 0 0 0 18px rgba(29, 111, 224, 0); } }
