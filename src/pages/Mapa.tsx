@@ -14,10 +14,10 @@ import type { Barbearia } from "../domain/types";
 // Centro de Manaus, usado enquanto não há ponto de busca.
 const MANAUS: L.LatLngTuple = [-3.1019, -60.025];
 
-// Mapa base escuro (OpenStreetMap via CARTO): combina com o tema do app e não exige chave de API.
-const TILES = "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
+// Mapa base do OpenStreetMap (sem chave de API). O tema escuro vem de um filtro CSS em .bh-tiles (index.css).
+const TILES = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
 const ATRIBUICAO =
-  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>';
+  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
 
 // Pino com tesoura, na cor da marca do app. A identidade de cada barbearia aparece nos cartões.
 const TESOURA =
@@ -93,8 +93,8 @@ export default function Mapa() {
     });
     L.tileLayer(TILES, {
       attribution: ATRIBUICAO,
-      subdomains: "abcd",
       maxZoom: 19,
+      className: "bh-tiles",
     }).addTo(m);
     m.attributionControl.setPrefix(false);
     camada.current = L.layerGroup().addTo(m);
