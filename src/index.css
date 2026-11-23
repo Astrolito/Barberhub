@@ -40,6 +40,7 @@
 
 /* Mapa (Leaflet) no tema escuro do app. */
 .bh-mapa { background: #0e0e11; font-family: inherit; }
+.bh-mapa .bh-tiles { filter: invert(1) hue-rotate(180deg) brightness(0.85) contrast(0.9) saturate(0.6); }
 .bh-mapa .leaflet-control-attribution { background: rgba(9, 9, 11, 0.7); color: #71717a; font-size: 10px; }
 .bh-mapa .leaflet-control-attribution a { color: #a1a1aa; }
 .bh-pin {
