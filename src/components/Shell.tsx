@@ -1,8 +1,8 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Link, Navigate, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useApp } from '../state/AppContext'
 import { cx } from './ui'
-import { ICalendar, IHeart, IHelp, IHome, IInfo, ILogout, IMenu, IScissors, IUser, IX } from './Icons'
+import { ICalendar, IHeart, IHelp, IHome, IInfo, ILogout, IMenu, IScissors, IUser, IWifiOff, IX } from './Icons'
 
 const TABS = [
   { to: '/', label: 'Início', icon: IHome, end: true },
@@ -137,9 +137,10 @@ export function Toaster() {
 }
 
 export function RequireAuth({ children }: { children: ReactNode }) {
-  const { usuario, pronto } = useApp()
+  const { usuario, pronto, erro } = useApp()
   const loc = useLocation()
   if (!pronto) return <Carregando />
+  if (erro && !usuario) return <SemConexao />
   if (!usuario) return <Navigate to="/entrar" replace state={{ from: loc.pathname }} />
   return <>{children}</>
 }
@@ -161,6 +162,61 @@ export function Carregando() {
         </span>
         <span className="h-5 w-5 animate-spin rounded-full border-2 border-line border-t-brand" />
       </div>
+    </div>
+  )
+}
+
+/** Falha na primeira carga: sem dados para mostrar. */
+export function SemConexao() {
+  const { erro, recarregar } = useApp()
+  const [tentando, setTentando] = useState(false)
+  return (
+    <div className="grid min-h-[100dvh] place-items-center px-8 text-center">
+      <div className="animate-fade-up flex flex-col items-center">
+        <div className="grid h-14 w-14 place-items-center rounded-2xl bg-surface2 text-brand-ink">
+          <IWifiOff />
+        </div>
+        <h1 className="mt-4 text-[19px] font-semibold">Não foi possível carregar</h1>
+        <p className="mt-1 max-w-[300px] text-[14.5px] leading-5 text-muted">{erro ?? 'Verifique sua internet e tente de novo.'}</p>
+        <button
+          disabled={tentando}
+          onClick={async () => {
+            setTentando(true)
+            await recarregar()
+            setTentando(false)
+          }}
+          className="press mt-6 h-11 rounded-xl bg-brand px-6 text-[15px] font-semibold text-white disabled:opacity-50"
+        >
+          {tentando ? 'Tentando…' : 'Tentar de novo'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/** Aviso fixo quando o aparelho fica sem internet (os dados na tela podem estar desatualizados). */
+export function AvisoOffline() {
+  const [online, setOnline] = useState(() => (typeof navigator === 'undefined' ? true : navigator.onLine))
+  const { recarregar, modo } = useApp()
+  useEffect(() => {
+    const on = () => {
+      setOnline(true)
+      if (modo === 'supabase') recarregar()
+    }
+    const off = () => setOnline(false)
+    window.addEventListener('online', on)
+    window.addEventListener('offline', off)
+    return () => {
+      window.removeEventListener('online', on)
+      window.removeEventListener('offline', off)
+    }
+  }, [recarregar, modo])
+  if (online || modo === 'local') return null
+  return (
+    <div role="status" className="animate-fade-in fixed inset-x-0 bottom-[calc(64px+env(safe-area-inset-bottom))] z-40 mx-auto flex max-w-[480px] items-center justify-center gap-2 px-4 pb-2">
+      <span className="flex items-center gap-2 rounded-full border border-line bg-surface2/95 px-4 py-2 text-[13.5px] font-medium text-muted shadow-xl backdrop-blur">
+        <IWifiOff size={16} /> Sem internet. Mostrando os últimos dados.
+      </span>
     </div>
   )
 }
