@@ -9,6 +9,7 @@
 | 23/11/2026 | Melhorias (PR #3): agenda configurável, remarcar, avaliações, acesso de barbeiro por lista de e-mails, fotos no Storage, testes e CI. |
 | 23/11/2026 | Mapa: tiles do CARTO trocados pelos do OpenStreetMap (PR #4). |
 | 27/11/2026 | Banco Supabase reativado depois da pausa do plano gratuito; documentação reorganizada em `docs/` com o documento de requisitos. |
+| 27/11/2026 | Modelo de receita: assinatura mensal das barbearias (teste grátis de 30 dias, planos Básico, Profissional e Premium) e parcerias com preço diferenciado em destaque. |
 
 ## Melhorias em relação ao Glide
 
@@ -29,3 +30,9 @@
 - **Cliente:** remarcar (inclusive trocando de barbeiro), Google Agenda / `.ics`, lembrete no app instalado, avaliações com nota no catálogo, agendar a partir do serviço, WhatsApp/telefone e horário de atendimento na página da unidade.
 - **Barbeiro:** agenda configurável, painel (dia, semana, faturado no mês, nota, pendentes), serviços editáveis, descrição e contato da unidade, nome do cliente nos atendimentos.
 - **Segurança e desempenho:** e-mail de acesso fora da API pública, fotos no Storage, Realtime aplica só a linha alterada, tela de erro e aviso sem internet, testes automáticos e CI.
+
+## Modelo de receita (27/11/2026)
+
+- **Assinatura mensal:** planos com limite de barbeiros, 30 dias de teste grátis, página "Plano e parceria" na Área do barbeiro com situação, troca, renovação e cancelamento. Barbearia com assinatura vencida sai da busca e do mapa e não recebe reservas novas.
+- **Parcerias em vez de patrocínio:** como a busca é por localização, não há anúncio no topo. A parceira oferece de 10% a 30% de desconto pelo app e ganha a seção "Parceiras BarberHUB" no Início, selo "Parceira", pino dourado no mapa e preço riscado nos serviços. A reserva já grava o preço com desconto.
+- **Sem gateway de pagamento:** cobrança enviada pela equipe e confirmada no SQL Editor.

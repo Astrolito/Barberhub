@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { useApp, useUsuario } from '../state/AppContext'
-import { Capa, Empty, Estrelas, Field, Note, Page, Row, SearchInput, SectionTitle, TopBar, cx } from '../components/ui'
+import { Capa, Empty, Estrelas, Field, Note, Page, PrecoApp, Row, SearchInput, SectionTitle, SeloParceira, TopBar, cx } from '../components/ui'
 import { IChat, IClock, IHeart, IPhone, IPin, IRepeat, IScissors, IconeServico } from '../components/Icons'
 import { brl, dataLonga } from '../lib/format'
-import { jornadaDe, notaDaBarbearia, resumoJornada } from '../domain/rules'
+import { barbeariaVisivel, jornadaDe, notaDaBarbearia, parceriaVigente, precoNoApp, resumoJornada } from '../domain/rules'
 import type { Barbearia as TBarbearia, Profissional } from '../domain/types'
 
 const fone = (d: string) => (d.length === 11 ? `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}` : `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`)
@@ -62,7 +62,9 @@ export default function Barbearia() {
   const servicos = db.servicos.filter((s) => s.barbeariaId === b.id && s.disponivel && s.nome.toLowerCase().includes(qs.toLowerCase()))
   const todosProfs = db.profissionais.filter((p) => p.barbeariaId === b.id)
   const profs = todosProfs.filter((p) => p.nome.toLowerCase().includes(qp.toLowerCase()))
-  const temAgenda = todosProfs.length > 0
+  const emDia = barbeariaVisivel(b)
+  const temAgenda = todosProfs.length > 0 && emDia
+  const parceria = parceriaVigente(db, b.id)
   const mapa = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(b.nome + ' ' + b.endereco)}`
   const nota = notaDaBarbearia(db, b.id)
   const avaliacoes = db.avaliacoes
@@ -84,10 +86,17 @@ export default function Barbearia() {
             Remarcando sua reserva. Escolha o barbeiro e o novo horário.
           </div>
         )}
+        {parceria && <SeloParceira className="mb-2" />}
         <h1 className="text-[26px] font-bold leading-tight tracking-tight">{b.nome}</h1>
         <p className="mt-1 text-[16px] text-muted">
           {b.cidade}, {b.bairro}
         </p>
+        {parceria && (
+          <div className="mt-3 rounded-2xl border border-amber-400/40 bg-amber-400/10 p-3.5 text-[14.5px] leading-[21px] text-amber-100">
+            <b className="font-semibold text-amber-300">Parceira BarberHUB:</b> {parceria.descontoPct}% de desconto em todos os serviços agendados pelo app
+            {parceria.fim ? `, até ${new Date(parceria.fim).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}` : ''}.
+          </div>
+        )}
         {nota && (
           <a href="#avaliacoes" className="mt-2 flex items-center gap-2 text-[14.5px] text-muted">
             <Estrelas valor={nota.media} size={16} />
@@ -158,7 +167,7 @@ export default function Barbearia() {
                           <IconeServico tipo={s.icone} size={34} />
                         </span>
                       }
-                      overline={<span className="tabular-nums">{brl(s.preco)}</span>}
+                      overline={<span className="tabular-nums"><PrecoApp {...precoNoApp(db, s)} formatar={brl} /></span>}
                       title={s.nome}
                       subtitle={[s.descricao, `${s.duracaoMinutos} min`].filter(Boolean).join(' · ')}
                     />
@@ -195,7 +204,15 @@ export default function Barbearia() {
             )}
           </>
         ) : (
-          <Empty icon={<IScissors />} title="Agenda online em breve" text="Esta unidade ainda não abriu horários no BarberHUB. Favorite para acompanhar." />
+          <Empty
+            icon={<IScissors />}
+            title={emDia ? 'Agenda online em breve' : 'Reservas pausadas'}
+            text={
+              emDia
+                ? 'Esta unidade ainda não abriu horários no BarberHUB. Favorite para acompanhar.'
+                : 'Esta barbearia não está recebendo reservas pelo app no momento. Favorite para acompanhar.'
+            }
+          />
         )}
       </Page>
     </>
@@ -248,19 +265,21 @@ export function ServicoDetalhe() {
         <p className="mt-1 text-[16px] text-muted">{s.descricao}</p>
         <div className="mt-5">
           <Field label="Duração">{s.duracaoMinutos} min</Field>
-          <Field label="Preço">R$ {brl(s.preco)}</Field>
+          <Field label="Preço">
+            <PrecoApp {...precoNoApp(db, s)} formatar={(v) => `R$ ${brl(v)}`} />
+          </Field>
           {s.categoria && <Field label="Categoria">{s.categoria}</Field>}
           {s.inclui && <Field label="Inclui">{s.inclui}</Field>}
           <Field label="Barbearia">{b ? <Link to={`/barbearia/${b.id}`} className="text-brand-ink">{b.nome}</Link> : '—'}</Field>
         </div>
-        {s.disponivel ? (
+        {s.disponivel && b && barbeariaVisivel(b) ? (
           <>
             <SectionTitle>Agendar com</SectionTitle>
             <ListaProfissionais profs={profs} sufixo={`?servico=${s.id}`} />
           </>
         ) : (
           <div className="mt-6">
-            <Note>Este serviço está indisponível no momento.</Note>
+            <Note>{s.disponivel ? 'Esta barbearia não está recebendo reservas pelo app no momento.' : 'Este serviço está indisponível no momento.'}</Note>
           </div>
         )}
       </Page>

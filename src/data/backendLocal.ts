@@ -112,6 +112,32 @@ export function criarBackendLocal(): Backend {
       if (u.papel !== 'Barbeiro' || u.barbeariaId !== id) throw new R.RegraError('Apenas o barbeiro vinculado pode alterar a foto.')
       commit({ ...db, barbearias: db.barbearias.map((b) => (b.id === id ? { ...b, fotoCapa: foto } : b)) })
     },
+    async escolherPlano(planoId) {
+      const r = R.escolherPlano(db, eu(), planoId)
+      commit(r.db)
+      return r.assinatura
+    },
+    async cancelarAssinatura() {
+      commit(R.cancelarAssinatura(db, eu()))
+    },
+    async solicitarParceria(pct, dias) {
+      const r = R.solicitarParceria(db, eu(), pct, dias)
+      commit(r.db)
+      return r.parceria
+    },
+    async encerrarParceria(id) {
+      commit(R.encerrarParceria(db, eu(), id))
+    },
+    async simularEquipe() {
+      const b = eu().barbeariaId
+      if (!b) return
+      let novo = db
+      const pedido = novo.parcerias.find((p) => p.barbeariaId === b && p.status === 'Solicitada')
+      if (pedido) novo = R.aprovarParceria(novo, pedido.id)
+      const a = R.assinaturaDe(novo, b)
+      if (a && (a.status === 'Pendente' || R.situacaoAssinatura(a) === 'Vencida')) novo = R.confirmarPagamento(novo, b)
+      commit(novo)
+    },
     async resetar() {
       commit(repo.resetar())
     },

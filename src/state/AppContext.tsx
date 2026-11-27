@@ -34,6 +34,11 @@ interface Ctx {
   avaliar(agendamentoId: string, nota: number, comentario: string): Promise<boolean>
   /** foto: data URL nova (é enviada ao armazenamento) ou undefined para remover. */
   atualizarFotoBarbearia(barbeariaId: string, foto: string | undefined): Promise<void>
+  escolherPlano(planoId: string): Promise<boolean>
+  cancelarAssinatura(): Promise<boolean>
+  solicitarParceria(descontoPct: number, dias: number): Promise<boolean>
+  encerrarParceria(parceriaId: string, pedido: boolean): Promise<boolean>
+  simularEquipe?: () => Promise<void>
   resetarDados?: () => Promise<void>
   toasts: Toast[]
   toast(texto: string, tipo?: Toast['tipo']): void
@@ -45,7 +50,7 @@ const URL_SB = import.meta.env.VITE_SUPABASE_URL as string | undefined
 const CHAVE_SB = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
 const backend: Backend = URL_SB && CHAVE_SB ? criarBackendSupabase(URL_SB, CHAVE_SB) : criarBackendLocal()
 
-const vazio: Banco = { versao: 2, usuarios: [], barbearias: [], profissionais: [], servicos: [], horarios: [], agendamentos: [], avaliacoes: [] }
+const vazio: Banco = { versao: 3, usuarios: [], barbearias: [], profissionais: [], servicos: [], horarios: [], agendamentos: [], avaliacoes: [], planos: [], assinaturas: [], parcerias: [] }
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [estado, setEstado] = useState<Estado>({ db: vazio, email: null, pronto: false })
@@ -133,6 +138,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     atualizarFotoBarbearia: async (id, foto) => {
       await tentar(async () => backend.atualizarFotoBarbearia(id, await subirSeNovo('barbearias', foto)), foto ? 'Foto atualizada.' : 'Foto removida.')
     },
+    escolherPlano: (id) => ok(tentar(() => backend.escolherPlano(id), 'Plano escolhido.')),
+    cancelarAssinatura: () =>
+      ok(tentar(() => backend.cancelarAssinatura().then(() => true), 'Assinatura cancelada. Sua barbearia segue visível até o fim do período.', 'info')),
+    solicitarParceria: (pct, dias) => ok(tentar(() => backend.solicitarParceria(pct, dias), 'Pedido enviado. A equipe BarberHUB analisa em até 1 dia útil.')),
+    encerrarParceria: (id, pedido) =>
+      ok(tentar(() => backend.encerrarParceria(id).then(() => true), pedido ? 'Pedido de parceria cancelado.' : 'Parceria encerrada.', 'info')),
+    simularEquipe: backend.simularEquipe
+      ? async () => {
+          await tentar(() => backend.simularEquipe!(), 'Equipe BarberHUB: pedido aprovado.', 'info')
+        }
+      : undefined,
     resetarDados: backend.resetar
       ? async () => {
           await tentar(() => backend.resetar!(), 'Dados de demonstração restaurados.', 'info')

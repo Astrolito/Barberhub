@@ -2,10 +2,10 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useApp, useUsuario } from '../../state/AppContext'
 import { Button, Campo, Capa, Empty, Note, Page, Row, Sheet, StatusLabel, Switch, TopBar, cx, inputCls } from '../../components/ui'
-import { ICalendar, ICamera, IChevron, IClock, IList, ILock, IPlus, IScissors, IStore, IUnlock, IconeServico } from '../../components/Icons'
+import { ICalendar, ICamera, IChevron, IClock, IList, ILock, IPlus, IScissors, IStore, ITag, IUnlock, IconeServico } from '../../components/Icons'
 import { lerImagem } from '../../lib/image'
 import { brlFull, dataHoraLonga, diaLocal, hora } from '../../lib/format'
-import { INTERVALOS_PERMITIDOS, aguardandoBarbeiro, iniciosDoDia, jornadaDe, resumoBarbeiro, resumoJornada, validarJornada, type ServicoEditavel } from '../../domain/rules'
+import { INTERVALOS_PERMITIDOS, aguardandoBarbeiro, assinaturaDe, parceriaVigente, situacaoAssinatura, iniciosDoDia, jornadaDe, resumoBarbeiro, resumoJornada, validarJornada, type ServicoEditavel } from '../../domain/rules'
 import type { IconeServico as TIcone, Jornada, Servico } from '../../domain/types'
 
 function useGuard() {
@@ -40,12 +40,29 @@ export default function AreaBarbeiro() {
   if (!u) return <SemAcesso />
   const r = resumoBarbeiro(db, u.profissionalId!)
   const prof = db.profissionais.find((p) => p.id === u.profissionalId)
+  const assinatura = assinaturaDe(db, u.barbeariaId)
+  const situacao = situacaoAssinatura(assinatura)
+  const parceria = u.barbeariaId ? parceriaVigente(db, u.barbeariaId) : undefined
+  const ate = assinatura ? new Date(assinatura.validaAte).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : ''
+  const textoPlano =
+    situacao === 'Teste'
+      ? `Teste grátis até ${ate}`
+      : situacao === 'Ativa'
+        ? `Ativa até ${ate}${parceria ? ` · parceira −${parceria.descontoPct}%` : ''}`
+        : situacao === 'Pendente'
+          ? 'Aguardando pagamento'
+          : situacao === 'Cancelada'
+            ? `Cancelada, no ar até ${ate}`
+            : situacao === 'Vencida'
+              ? 'Vencida: renove para aparecer na busca'
+              : 'Escolha um plano'
   const cards = [
     { to: '/barbeiro/atendimentos', icon: <ICalendar />, title: 'Atendimentos', text: r.pendentes ? `${r.pendentes} aguardando você` : 'Próximos e histórico' },
     { to: '/barbeiro/horarios', icon: <IClock />, title: 'Meus horários', text: 'Bloquear e liberar intervalos' },
     { to: '/barbeiro/agenda', icon: <ICalendar />, title: 'Minha agenda', text: resumoJornada(jornadaDe(prof)) },
     { to: '/barbeiro/servicos', icon: <IList />, title: 'Serviços', text: 'Preços, duração e disponibilidade' },
     { to: '/barbeiro/barbearia', icon: <IStore />, title: 'Minha barbearia', text: 'Foto, descrição e contato' },
+    { to: '/barbeiro/plano', icon: <ITag />, title: 'Plano e parceria', text: textoPlano },
   ]
   return (
     <>
@@ -63,6 +80,12 @@ export default function AreaBarbeiro() {
         {r.pendentes > 0 && (
           <Link to="/barbeiro/atendimentos?aba=pendentes" className="press mt-2.5 flex items-center justify-between rounded-2xl border border-amber-400/40 bg-amber-400/10 p-3.5 text-[15px] font-medium text-amber-200">
             {r.pendentes} atendimento{r.pendentes > 1 ? 's' : ''} para finalizar ou marcar falta
+            <IChevron size={18} />
+          </Link>
+        )}
+        {(situacao === 'Vencida' || situacao === 'Sem assinatura') && (
+          <Link to="/barbeiro/plano" className="press mt-2.5 flex items-center justify-between rounded-2xl border border-red-400/40 bg-red-500/10 p-3.5 text-[15px] font-medium text-red-200">
+            Assinatura vencida: sua barbearia saiu da busca. Renovar
             <IChevron size={18} />
           </Link>
         )}

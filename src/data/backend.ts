@@ -3,7 +3,7 @@
 // - supabase: Postgres com RLS, login por e-mail e regras em funções SQL atômicas
 // O modo é escolhido pelas variáveis VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY.
 
-import type { Agendamento, Banco, Jornada, Servico, Usuario } from '../domain/types'
+import type { Agendamento, Assinatura, Banco, Jornada, Parceria, Servico, Usuario } from '../domain/types'
 import type { DadosBarbearia, ServicoEditavel } from '../domain/rules'
 
 export type Estado = {
@@ -38,5 +38,13 @@ export interface Backend {
   atualizarFotoBarbearia(barbeariaId: string, foto: string | undefined): Promise<void>
   /** Guarda uma imagem (data URL já reduzida) e devolve o endereço para usar no app. */
   subirImagem(pasta: 'barbearias' | 'perfis', dataUrl: string): Promise<string>
+  /** Assinatura da unidade do barbeiro (RF15/RF16). */
+  escolherPlano(planoId: string): Promise<Assinatura>
+  cancelarAssinatura(): Promise<void>
+  /** Parceria da unidade do barbeiro (RF17). */
+  solicitarParceria(descontoPct: number, dias: number): Promise<Parceria>
+  encerrarParceria(parceriaId: string): Promise<void>
+  /** Só no modo demonstração: aprova o pedido de parceria e confirma o pagamento pendente. */
+  simularEquipe?(): Promise<void>
   resetar?(): Promise<void>
 }

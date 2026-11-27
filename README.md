@@ -13,6 +13,7 @@ Equipe: Renatto Gabriel (PO) · Nicolas Duarte (Dev) · Sávio Santos (QA) · Ya
 **Cliente**
 
 - Entra sem senha, por link ou código de 6 dígitos enviado por e-mail.
+- Vê as **parceiras BarberHUB** em destaque, com preço especial pelo app.
 - Vê as barbearias ordenadas pela distância, com raio de 1, 3, 5, 10, 20 km ou sem limite (padrão 5 km).
 - **Mapa de barbearias próximas** (aba Mapa): marcadores, o ponto de busca e o círculo do raio escolhido. A localização vem do GPS, de um endereço ou do bairro.
 - Página da unidade com serviços, preços, profissionais, avaliações, WhatsApp, telefone e horário de atendimento.
@@ -26,6 +27,13 @@ Equipe: Renatto Gabriel (PO) · Nicolas Duarte (Dev) · Sávio Santos (QA) · Ya
 - Vê os atendimentos com o nome do cliente e encerra como `Finalizado` ou `Não compareceu`.
 - Painel: atendimentos do dia e da semana, faturado no mês, nota média.
 - Cadastra e edita serviços; edita descrição, contato e foto de capa da unidade.
+- **Plano e parceria:** vê a assinatura (teste grátis, ativa, aguardando pagamento, vencida), troca de plano, renova ou cancela, e pede para virar **parceira BarberHUB** com preço diferenciado.
+
+**Modelo de receita**
+
+- **Assinatura mensal** paga pela barbearia: Básico R$ 49,90 (até 2 barbeiros), Profissional R$ 89,90 (até 5) e Premium R$ 149,90 (ilimitado), com 30 dias de teste grátis. Sem assinatura em dia, a barbearia sai da busca e do mapa e não recebe reservas.
+- **Parcerias:** a busca continua pela distância. A parceira oferece de 10% a 30% de desconto em todos os serviços agendados pelo app e ganha destaque na seção "Parceiras BarberHUB" do Início, com selo "Parceira", pino dourado no mapa e preço riscado.
+- Não há gateway de pagamento: a equipe envia a cobrança e confirma no Supabase. Veja [Cobrança e parcerias](docs/implantacao.md#cobrança-e-parcerias).
 
 Quem vira barbeiro é decidido por uma **lista de e-mails de acesso** no banco (tabela `acessos_profissionais`). Veja [Dar acesso de barbeiro](docs/implantacao.md#dar-acesso-de-barbeiro).
 
@@ -57,8 +65,8 @@ Localização: o navegador só libera o GPS em `https` ou `localhost`. Para test
 |---|---|
 | [docs/requisitos.md](docs/requisitos.md) | Requisitos funcionais, não funcionais, de negócio, de sistema e de usuário, com rastreabilidade |
 | [docs/arquitetura.md](docs/arquitetura.md) | Camadas, pastas, roteamento, mapa, máquinas de estado e integrações |
-| [docs/banco-de-dados.md](docs/banco-de-dados.md) | As 8 tabelas, RLS, funções SQL, Storage, Realtime e migrações |
-| [docs/implantacao.md](docs/implantacao.md) | Supabase, Vercel, acesso de barbeiro, app Android/iOS e operação |
+| [docs/banco-de-dados.md](docs/banco-de-dados.md) | As 11 tabelas, RLS, funções SQL, assinaturas e parcerias, Storage, Realtime e migrações |
+| [docs/implantacao.md](docs/implantacao.md) | Supabase, Vercel, acesso de barbeiro, cobrança e parcerias, app Android/iOS e operação |
 | [docs/historico.md](docs/historico.md) | Melhorias em relação ao Glide e versões |
 
 ## Tecnologias
@@ -68,5 +76,6 @@ React 18 · TypeScript · Vite · Tailwind CSS · React Router (HashRouter) · S
 ## Limites conhecidos
 
 - Coordenadas das barbearias são aproximadas pelo endereço/bairro; logos reais não estão incluídas.
-- Serviços, preços, profissionais e horários são dados acadêmicos, sem parceria com as empresas.
+- Serviços, preços, profissionais e horários são dados acadêmicos, sem parceria real com as empresas. As parcerias e assinaturas das unidades de exemplo são de demonstração.
+- Pagamento da assinatura fora do app (sem gateway); a ativação é manual.
 - O Supabase no plano gratuito pausa o projeto depois de cerca de uma semana sem uso. Veja [Operação](docs/implantacao.md#operação).

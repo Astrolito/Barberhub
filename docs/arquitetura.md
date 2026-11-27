@@ -64,7 +64,7 @@ Roteamento com `HashRouter`, que funciona em hospedagem estática e dentro do we
 | `/barbearia/:id`, `/servico/:id`, `/profissional/:id` | Detalhes do catálogo |
 | `/agendar/:horarioId`, `/agendamento/:id` | Revisão da reserva e detalhe (remarcar, cancelar, avaliar) |
 | `/perfil/dados`, `/perfil/pagamentos`, `/perfil/historico` | Perfil |
-| `/barbeiro` e `/barbeiro/{barbearia,atendimentos,horarios,agenda,servicos}` | Área do barbeiro |
+| `/barbeiro` e `/barbeiro/{barbearia,atendimentos,horarios,agenda,servicos,plano}` | Área do barbeiro (`plano`: assinatura e parceria) |
 | `/ajuda`, `/sobre` | Informações |
 
 As rotas da Área do barbeiro só mostram conteúdo para perfis com papel `Barbeiro`; o servidor também recusa as funções de barbeiro para quem não tem esse papel.
@@ -98,7 +98,17 @@ A localização vem do GPS (`@capacitor/geolocation` no app nativo, API do naveg
 - Cada profissional define dias, início, fim e duração do intervalo (padrão Seg a Sáb, 10:00 às 17:30, 90 min).
 - Ao abrir um dia, os horários faltantes são criados; livres fora da jornada saem (ou ficam `Bloqueados` se já tiveram reserva).
 
-Os limites (2h para cancelar/remarcar, 3 reservas futuras) estão em `src/domain/rules.ts` **e** na migração `20261123000000_melhorias.sql`. Mude nos dois.
+**Assinatura**
+
+- `Teste` (30 dias, ao criar a barbearia) → `Pendente` ao escolher plano depois do teste → `Ativa` quando a equipe confirma o pagamento.
+- Qualquer status → `Cancelada` pelo barbeiro (vale até o fim do prazo). Prazo vencido = `Vencida` (calculado): a unidade sai da busca e não recebe reservas.
+
+**Parceria**
+
+- `Solicitada` → `Ativa` (equipe aprova; conta de inicio a fim) ou `Recusada`.
+- `Solicitada` → `Cancelada` e `Ativa` → `Encerrada` pelo barbeiro. Só `Ativa` dentro do período dá destaque e desconto.
+
+Os limites (2h para cancelar/remarcar, 3 reservas futuras) estão em `src/domain/rules.ts` **e** na migração `20261123000000_melhorias.sql`. Os de assinatura e parceria, em `rules.ts` e `20261127000000_assinaturas_parcerias.sql`. Mude nos dois.
 
 ## Integrações
 

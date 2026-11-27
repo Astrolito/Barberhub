@@ -3,7 +3,7 @@
 // ou lançam RegraError. No modo Supabase as mesmas regras rodam em funções SQL
 // (supabase/migrations), e os limites abaixo precisam ficar iguais aos de lá.
 
-import type { Agendamento, Avaliacao, Banco, Barbearia, Horario, Jornada, Profissional, Servico, Usuario } from './types'
+import type { Agendamento, Assinatura, Avaliacao, Banco, Barbearia, Horario, Jornada, Parceria, Profissional, Servico, StatusAssinatura, Usuario } from './types'
 import { RAIO_PADRAO_KM } from '../data/seed'
 import { uuid } from '../lib/id'
 
@@ -150,6 +150,7 @@ export function confirmarAgendamento(
   if (reservasAtivas(db, args.cliente.email).length >= LIMITE_RESERVAS_ATIVAS)
     throw new RegraError(`Você já tem ${LIMITE_RESERVAS_ATIVAS} reservas futuras. Conclua ou cancele uma para agendar outra.`)
   verificarHorarioParaReserva(db, horario, servico, args.cliente.email)
+  exigirBarbeariaEmDia(db, horario.barbeariaId)
 
   const ts = new Date(agora()).toISOString()
   const ag: Agendamento = {
@@ -164,7 +165,7 @@ export function confirmarAgendamento(
     inicio: horario.inicio,
     fim: horario.fim,
     status: 'Confirmado',
-    precoReservado: servico.preco,
+    precoReservado: precoNoApp(db, servico).preco,
     duracaoReservada: servico.duracaoMinutos,
     criadoEm: ts,
     atualizadoEm: ts,
@@ -221,6 +222,7 @@ export function remarcarAgendamento(db: Banco, agendamentoId: string, novoHorari
   if (!servico) throw new RegraError('Serviço não encontrado.')
   // O serviço pode ter ficado indisponível depois da reserva; ao remarcar vale o que foi reservado.
   verificarHorarioParaReserva(db, novo, { ...servico, disponivel: true, duracaoMinutos: ag.duracaoReservada ?? servico.duracaoMinutos }, usuario.email, ag.id)
+  exigirBarbeariaEmDia(db, novo.barbeariaId)
   const ts = new Date(agora()).toISOString()
   const atualizado: Agendamento = { ...ag, horarioId: novo.id, profissionalId: novo.profissionalId, inicio: novo.inicio, fim: novo.fim, atualizadoEm: ts }
   return {
@@ -386,4 +388,130 @@ export function resumoBarbeiro(db: Banco, profissionalId: string) {
     nota: notas.length ? notas.reduce((s, a) => s + a.nota, 0) / notas.length : null,
     totalNotas: notas.length,
   }
+}
+
+// ───────────── Modelo de receita: assinatura e parceria (27/11/2026) ─────────────
+// Espelha supabase/migrations/20261127000000_assinaturas_parcerias.sql.
+
+/** Dias de teste grátis de uma barbearia nova. */
+export const DIAS_TESTE = 30
+/** Descontos que a parceira pode oferecer em todos os serviços agendados pelo app. */
+export const DESCONTOS_PARCERIA = [10, 15, 20, 25, 30]
+/** Duração de cada parceria, em dias. */
+export const PERIODOS_PARCERIA = [30, 90]
+
+const depoisDeAgora = (iso?: string) => !!iso && new Date(iso).getTime() > agora()
+
+/** RN08: aparece no catálogo e no mapa, e recebe reservas, só com assinatura em dia (teste ou paga). */
+export const barbeariaVisivel = (b: Barbearia) => depoisDeAgora(b.visivelAte)
+
+function exigirBarbeariaEmDia(db: Banco, barbeariaId: string) {
+  const b = db.barbearias.find((x) => x.id === barbeariaId)
+  if (!b || !barbeariaVisivel(b)) throw new RegraError('Esta barbearia não está recebendo reservas no momento.')
+}
+
+export type SituacaoAssinatura = StatusAssinatura | 'Vencida' | 'Sem assinatura'
+
+/** Situação para mostrar ao barbeiro. Vencida = o prazo (teste ou pago) acabou. */
+export function situacaoAssinatura(a: Assinatura | undefined): SituacaoAssinatura {
+  if (!a) return 'Sem assinatura'
+  return depoisDeAgora(a.validaAte) ? a.status : 'Vencida'
+}
+
+export const assinaturaDe = (db: Banco, barbeariaId: string | undefined) => db.assinaturas.find((a) => a.barbeariaId === barbeariaId)
+
+/** RN09: parceria em vigor (aprovada e dentro do período). Só ela dá destaque, selo e preço. */
+export function parceriaVigente(db: Banco, barbeariaId: string): Parceria | undefined {
+  return db.parcerias.find(
+    (p) => p.barbeariaId === barbeariaId && p.status === 'Ativa' && !!p.inicio && new Date(p.inicio).getTime() <= agora() && depoisDeAgora(p.fim),
+  )
+}
+
+/** Parceria pedida ou em vigor da unidade (no máximo uma aberta por vez). */
+export function parceriaAberta(db: Banco, barbeariaId: string): Parceria | undefined {
+  return db.parcerias.find((p) => p.barbeariaId === barbeariaId && (p.status === 'Solicitada' || (p.status === 'Ativa' && depoisDeAgora(p.fim))))
+}
+
+const centavos = (v: number) => Math.round(v * 100) / 100
+
+/** Preço de um serviço agendado pelo app: com o desconto da parceria, se houver. */
+export function precoNoApp(db: Banco, s: Servico): { preco: number; original?: number; descontoPct?: number } {
+  const p = parceriaVigente(db, s.barbeariaId)
+  if (!p) return { preco: s.preco }
+  return { preco: centavos((s.preco * (100 - p.descontoPct)) / 100), original: s.preco, descontoPct: p.descontoPct }
+}
+
+const iso = (ms: number) => new Date(ms).toISOString()
+
+function comVisibilidade(db: Banco, a: Assinatura): Banco {
+  return {
+    ...db,
+    assinaturas: [...db.assinaturas.filter((x) => x.barbeariaId !== a.barbeariaId), a],
+    barbearias: db.barbearias.map((b) => (b.id === a.barbeariaId ? { ...b, visivelAte: a.validaAte } : b)),
+  }
+}
+
+/** RF15/RF16: escolher, trocar ou renovar o plano. No teste só troca; fora dele fica Pendente até o pagamento. */
+export function escolherPlano(db: Banco, usuario: Usuario, planoId: string): { db: Banco; assinatura: Assinatura } {
+  const { barbeariaId } = exigirBarbeiro(usuario)
+  const plano = db.planos.find((p) => p.id === planoId)
+  if (!plano) throw new RegraError('Plano não encontrado.')
+  const equipe = db.profissionais.filter((p) => p.barbeariaId === barbeariaId).length
+  if (plano.maxProfissionais > 0 && equipe > plano.maxProfissionais)
+    throw new RegraError(`Sua equipe tem ${equipe} barbeiros; o plano ${plano.nome} permite até ${plano.maxProfissionais}.`)
+  const ts = iso(agora())
+  const atual = assinaturaDe(db, barbeariaId)
+  const assinatura: Assinatura = atual
+    ? { ...atual, planoId, status: atual.status === 'Teste' && depoisDeAgora(atual.validaAte) ? 'Teste' : 'Pendente', atualizadoEm: ts }
+    : { id: barbeariaId, barbeariaId, planoId, status: 'Teste', inicio: ts, validaAte: iso(agora() + DIAS_TESTE * 864e5), atualizadoEm: ts }
+  return { db: comVisibilidade(db, assinatura), assinatura }
+}
+
+/** RF16: cancelar. A unidade continua visível até o fim do período já pago (ou do teste). */
+export function cancelarAssinatura(db: Banco, usuario: Usuario): Banco {
+  const { barbeariaId } = exigirBarbeiro(usuario)
+  const a = assinaturaDe(db, barbeariaId)
+  if (!a || a.status === 'Cancelada') throw new RegraError('Não há assinatura para cancelar.')
+  return comVisibilidade(db, { ...a, status: 'Cancelada', atualizadoEm: iso(agora()) })
+}
+
+/** RF17: aderir à parceria. Exige assinatura em dia e nenhuma parceria aberta. A equipe aprova depois. */
+export function solicitarParceria(db: Banco, usuario: Usuario, descontoPct: number, dias: number): { db: Banco; parceria: Parceria } {
+  const { barbeariaId } = exigirBarbeiro(usuario)
+  if (!DESCONTOS_PARCERIA.includes(descontoPct)) throw new RegraError('Escolha um desconto entre 10% e 30%.')
+  if (!PERIODOS_PARCERIA.includes(dias)) throw new RegraError('Escolha 30 ou 90 dias.')
+  const a = assinaturaDe(db, barbeariaId)
+  if (!a || !depoisDeAgora(a.validaAte)) throw new RegraError('Renove a assinatura para virar parceira.')
+  if (parceriaAberta(db, barbeariaId)) throw new RegraError('Sua barbearia já tem uma parceria ativa ou em análise.')
+  const parceria: Parceria = { id: uuid(), barbeariaId, descontoPct, dias, status: 'Solicitada', criadoEm: iso(agora()) }
+  return { db: { ...db, parcerias: [...db.parcerias, parceria] }, parceria }
+}
+
+/** Cancela o pedido em análise ou encerra a parceria em vigor (o destaque e o desconto acabam na hora). */
+export function encerrarParceria(db: Banco, usuario: Usuario, parceriaId: string): Banco {
+  const { barbeariaId } = exigirBarbeiro(usuario)
+  const p = db.parcerias.find((x) => x.id === parceriaId && x.barbeariaId === barbeariaId && (x.status === 'Solicitada' || x.status === 'Ativa'))
+  if (!p) throw new RegraError('Parceria não encontrada.')
+  const fim = p.status === 'Ativa' && p.fim && depoisDeAgora(p.fim) ? iso(agora()) : p.fim
+  const novo: Parceria = { ...p, status: p.status === 'Solicitada' ? 'Cancelada' : 'Encerrada', fim }
+  return { ...db, parcerias: db.parcerias.map((x) => (x.id === p.id ? novo : x)) }
+}
+
+/** Só no modo demonstração: faz o papel da equipe e aprova o pedido de parceria. */
+export function aprovarParceria(db: Banco, parceriaId: string): Banco {
+  const ms = agora()
+  return {
+    ...db,
+    parcerias: db.parcerias.map((p) => (p.id === parceriaId && p.status === 'Solicitada' ? { ...p, status: 'Ativa', inicio: iso(ms), fim: iso(ms + p.dias * 864e5) } : p)),
+  }
+}
+
+/** Só no modo demonstração: faz o papel da equipe e confirma o pagamento de um mês. */
+export function confirmarPagamento(db: Banco, barbeariaId: string): Banco {
+  const a = assinaturaDe(db, barbeariaId)
+  if (!a) return db
+  const base = Math.max(new Date(a.validaAte).getTime(), agora())
+  const mais = new Date(base)
+  mais.setMonth(mais.getMonth() + 1)
+  return comVisibilidade(db, { ...a, status: 'Ativa', validaAte: iso(mais.getTime()), atualizadoEm: iso(agora()) })
 }

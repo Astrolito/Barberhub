@@ -4,7 +4,7 @@ Requisitos funcionais, não funcionais, de negócio, de sistema e de usuário do
 
 Equipe: Renatto Gabriel (PO) · Nicolas Duarte (Dev) · Sávio Santos (QA) · Yan Félix (Docs)
 
-**Resumo:** 50 requisitos — 14 funcionais, 8 não funcionais, 11 de negócio (4 objetivos e 7 regras), 7 de sistema e 10 de usuário.
+**Resumo:** 60 requisitos — 18 funcionais, 8 não funcionais, 14 de negócio (5 objetivos e 9 regras), 8 de sistema e 12 de usuário. O modelo de receita (assinatura mensal e parceria) entrou em 27/11/2026: RN-O5, RF15 a RF18, RN08, RN09, RS08, RU11 e RU12.
 
 ## 1. Requisitos funcionais
 
@@ -33,6 +33,15 @@ O que o sistema deve fazer. Cada RF atende a um ou mais requisitos de usuário (
 | RF12 | Acompanhar o painel: atendimentos do dia e da semana, faturado no mês, nota média |
 | RF13 | Cadastrar e editar serviços com nome, preço e duração |
 | RF14 | Editar a unidade: descrição, contato, horário de atendimento e foto de capa |
+| RF15 | Assinar um plano mensal, começando com 30 dias de teste grátis |
+| RF16 | Ver a situação da assinatura (em teste, ativa, aguardando pagamento, cancelada, vencida), trocar de plano, renovar ou cancelar |
+| RF17 | Aderir à parceria BarberHUB, definindo o preço diferenciado (10% a 30% de desconto pelo app) e o período (30 ou 90 dias) |
+
+### Cliente (parcerias)
+
+| ID | O sistema deve permitir ao cliente… |
+|---|---|
+| RF18 | Ver as barbearias parceiras em destaque (seção "Parceiras BarberHUB" no Início, selo "Parceira" no catálogo, no mapa e na unidade) e agendar com o preço diferenciado |
 
 ## 2. Requisitos não funcionais
 
@@ -58,7 +67,8 @@ Como o sistema deve se comportar.
 | RN-O1 | Agilidade | Marcar um horário em menos de 1 minuto (hoje depende de ligação ou WhatsApp) |
 | RN-O2 | Menos faltas | Reduzir em 20% as faltas, com lembrete e remarcação pelo próprio cliente |
 | RN-O3 | Ocupação | Agenda aberta 24 horas, para clientes acharem horários livres mesmo com a barbearia fechada |
-| RN-O4 | Custo | Sem taxa para a barbearia: pagamento no local e infraestrutura nos planos gratuitos |
+| RN-O4 | Custo | Sem taxa por atendimento: o cliente paga no local e a infraestrutura usa planos gratuitos |
+| RN-O5 | Receita | Receita recorrente com a assinatura mensal das barbearias, e parcerias que trazem clientes com preço diferenciado |
 
 ### Regras de negócio
 
@@ -70,7 +80,20 @@ Como o sistema deve se comportar.
 | RN04 | Só o barbeiro atribuído encerra, e só depois do início do atendimento |
 | RN05 | Só o titular avalia (nota de 1 a 5), e só atendimentos Finalizados |
 | RN06 | Jornada padrão: Seg a Sáb, 10:00 às 17:30, intervalos de 90 min; raio padrão de 5 km |
-| RN07 | Pagamento feito no estabelecimento, em dinheiro, Pix ou cartão |
+| RN07 | Pagamento do atendimento feito no estabelecimento, em dinheiro, Pix ou cartão |
+| RN08 | A barbearia só aparece na busca e no mapa, e só recebe reservas novas, com assinatura em teste ou paga dentro do prazo. Cancelada, segue no ar até o fim do período |
+| RN09 | A parceira só fica em destaque enquanto oferece o preço diferenciado (parceria aprovada e dentro do período), sempre com o selo "Parceira". A ordem da busca continua sendo a distância |
+
+### Modelo de receita
+
+A busca é por localização, então não há "anúncio pago no topo": a lista e o mapa seguem da mais próxima para a mais distante. A plataforma ganha com duas frentes:
+
+| Frente | Como funciona | Valores de referência |
+|---|---|---|
+| **Assinatura mensal** | Toda barbearia paga um plano para usar o app (agenda online, mapa, lembretes, avaliações). Começa com 30 dias de teste grátis. | Básico R$ 49,90 (até 2 barbeiros) · Profissional R$ 89,90 (até 5) · Premium R$ 149,90 (ilimitado) |
+| **Parceria BarberHUB** | A barbearia oferece desconto em todos os serviços agendados pelo app. Em troca, aparece na seção "Parceiras BarberHUB" do Início, com selo "Parceira" e pino dourado no mapa. Traz clientes novos para ela e usuários para a plataforma. | Desconto de 10% a 30%, por 30 ou 90 dias; aprovação da equipe |
+
+Não há gateway de pagamento no app: a equipe envia a cobrança (Pix ou boleto) e confirma o pagamento no painel. Os valores são de referência para o projeto e podem mudar sem alterar o código (tabela `planos`).
 
 ## 4. Requisitos de sistema
 
@@ -79,7 +102,7 @@ Como o sistema deve se comportar.
 - **Interface:** React 18, TypeScript, Vite e Tailwind. Telas → estado → regras → repositório.
 - **Backend:** Supabase — PostgreSQL com RLS, Auth por e-mail, Realtime e Storage de fotos. Região São Paulo.
 - **Entrega:** site em produção na Vercel; app Android e iOS pelo Capacitor, com GPS e notificações nativas.
-- Mapa com Leaflet + OpenStreetMap · 8 tabelas no banco · 11 funções SQL de regra · CI com GitHub Actions + Vitest.
+- Mapa com Leaflet + OpenStreetMap · 11 tabelas no banco · 15 funções SQL de regra (e 3 de administração) · CI com GitHub Actions + Vitest.
 
 Detalhes em [arquitetura.md](arquitetura.md) e [banco-de-dados.md](banco-de-dados.md).
 
@@ -94,6 +117,7 @@ Detalhes em [arquitetura.md](arquitetura.md) e [banco-de-dados.md](banco-de-dado
 | RS05 | Integração | Converter endereço em coordenadas pelo OpenStreetMap (Nominatim) |
 | RS06 | Interface | Usar GPS e notificações do aparelho por plugins do Capacitor |
 | RS07 | Interface | Atualizar as telas pelo Supabase Realtime quando uma reserva mudar |
+| RS08 | Dados | Guardar planos, assinaturas (plano, status, validade) e parcerias (desconto, início, fim, status) nas tabelas `planos`, `assinaturas` e `parcerias` |
 
 ## 5. Requisitos de usuário
 
@@ -104,6 +128,7 @@ Detalhes em [arquitetura.md](arquitetura.md) e [banco-de-dados.md](banco-de-dado
 | **RU03** agendar sem ligar e ser lembrado antes | **RU08** bloquear um horário quando não puder atender |
 | **RU04** remarcar se surgir um imprevisto | **RU09** registrar quem faltou |
 | **RU05** avaliar e ver a nota dos outros | **RU10** saber quanto faturei no mês |
+| **RU12** encontrar parceiras com preço especial | **RU11** assinar um plano e virar parceira para atrair clientes |
 
 ## 6. Rastreabilidade
 
@@ -115,6 +140,7 @@ Negócio e usuário originam os funcionais e não funcionais; o sistema detalha 
 | RN-O2 Menos faltas | RU03, RU04, RU09 | RF06, RF07, RF11 | RNF05 | RS03, RS06 |
 | RN-O3 Ocupação | RU05 a RU08 | RF07 a RF10 | RNF02 | RS03, RS07 |
 | RN-O4 Custo | RU10 | RF12 a RF14 | RNF07 | RS02, RS04 |
+| RN-O5 Receita | RU11, RU12 | RF15 a RF18 | RNF01, RNF07 | RS08 |
 
 ## 7. Onde cada regra está no código
 
@@ -125,5 +151,9 @@ Negócio e usuário originam os funcionais e não funcionais; o sistema detalha 
 | RN04 | encerrar | `encerrar_atendimento` |
 | RN05 | avaliar | `avaliar_atendimento` |
 | RN06 | jornada padrão, raio padrão | `jornada_padrao`, `preparar_horarios` |
-| RNF01 | — | RLS nas 8 tabelas |
+| RN08 | `barbeariaVisivel`, confirmar, remarcar | trigger `regras_reserva_barbearia` + `barbearias.visivel_ate` |
+| RN09 | `parceriaVigente`, `precoNoApp` | policy "parcerias em vigor" + desconto em `regras_reserva_barbearia` |
+| RF15, RF16 | `escolherPlano`, `cancelarAssinatura` | `escolher_plano`, `cancelar_assinatura` |
+| RF17 | `solicitarParceria`, `encerrarParceria` | `solicitar_parceria`, `encerrar_parceria` |
+| RNF01 | — | RLS nas 11 tabelas |
 | RNF08 | `rules.test.ts` | CI no GitHub Actions |

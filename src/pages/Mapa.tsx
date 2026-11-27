@@ -3,10 +3,10 @@ import { useNavigate } from "react-router-dom";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { useApp, useUsuario } from "../state/AppContext";
-import { Button, Capa, cx } from "../components/ui";
+import { Button, Capa, SeloParceira, cx } from "../components/ui";
 import { IChevron, ILocate, IPin } from "../components/Icons";
 import { OPCOES_DISTANCIA } from "../data/seed";
-import { raioAplicado } from "../domain/rules";
+import { barbeariaVisivel, parceriaVigente, raioAplicado } from "../domain/rules";
 import { capturarGps, distanciaKm, gpsIndisponivel } from "../lib/geo";
 import { km } from "../lib/format";
 import type { Barbearia } from "../domain/types";
@@ -24,8 +24,8 @@ const TESOURA =
   '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4 8.1 15.9M14.5 14.5 20 20M8.1 8.1 12 12"/></svg>';
 const icones = new Map<string, L.DivIcon>();
 /** dx desloca o pino na tela, para barbearias no mesmo endereço (ex.: shopping) não ficarem uma sobre a outra. */
-function iconePino(ativo: boolean, dx: number) {
-  const k = `${ativo}:${dx}`;
+function iconePino(ativo: boolean, dx: number, parceira: boolean) {
+  const k = `${ativo}:${dx}:${parceira}`;
   if (!icones.has(k))
     icones.set(
       k,
@@ -33,7 +33,7 @@ function iconePino(ativo: boolean, dx: number) {
         className: "",
         iconSize: [44, 52],
         iconAnchor: [22 - dx, 50],
-        html: `<div class="bh-pin${ativo ? " bh-pin--ativo" : ""}"><span>${TESOURA}</span></div>`,
+        html: `<div class="bh-pin${ativo ? " bh-pin--ativo" : ""}${parceira ? " bh-pin--parceira" : ""}"><span>${TESOURA}</span></div>`,
       }),
     );
   return icones.get(k)!;
@@ -74,13 +74,17 @@ export default function Mapa() {
   // Barbearias dentro do raio (ou todas, sem ponto de busca / sem limite), da mais próxima para a mais distante.
   const visiveis = useMemo(() => {
     const itens = db.barbearias
-      .filter((b) => b.cidade === "Manaus")
-      .map((b) => ({ b, dist: ref ? distanciaKm(ref, b) : undefined }));
+      .filter((b) => b.cidade === "Manaus" && barbeariaVisivel(b))
+      .map((b) => ({
+        b,
+        dist: ref ? distanciaKm(ref, b) : undefined,
+        parceria: parceriaVigente(db, b.id),
+      }));
     if (!ref) return itens;
     return itens
       .filter((x) => raio === 0 || (x.dist ?? 0) <= raio)
       .sort((a, b) => (a.dist ?? 0) - (b.dist ?? 0));
-  }, [db.barbearias, ref, raio]);
+  }, [db, ref, raio]);
 
   // Cria o mapa uma vez.
   useEffect(() => {
@@ -129,13 +133,14 @@ export default function Mapa() {
       }).addTo(g);
     }
     const dx = deslocamentos(visiveis);
-    visiveis.forEach(({ b }, i) => {
+    visiveis.forEach(({ b, parceria }, i) => {
       const ativo = b.id === selecionada;
+      const nome = parceria ? `${b.nome} (parceira)` : b.nome;
       L.marker([b.lat, b.lng], {
-        icon: iconePino(ativo, dx[i]),
-        title: b.nome,
-        alt: b.nome,
-        zIndexOffset: ativo ? 500 : 0,
+        icon: iconePino(ativo, dx[i], !!parceria),
+        title: nome,
+        alt: nome,
+        zIndexOffset: ativo ? 500 : parceria ? 100 : 0,
         keyboard: true,
       })
         .on("click", (e) => {
@@ -330,7 +335,7 @@ export default function Mapa() {
           ref={lista}
           className="no-scrollbar absolute inset-x-0 bottom-3 z-[500] flex snap-x snap-mandatory gap-2.5 overflow-x-auto px-3 animate-fade-up"
         >
-          {visiveis.map(({ b, dist }) => {
+          {visiveis.map(({ b, dist, parceria }) => {
             const ativo = b.id === selecionada;
             return (
               <div
@@ -353,8 +358,9 @@ export default function Mapa() {
                     onClick={() => selecionar(b.id, true)}
                     className="block w-full text-left"
                   >
-                    <div className="text-[12px] font-semibold uppercase tracking-wide text-brand-ink">
+                    <div className="flex items-center gap-1.5 text-[12px] font-semibold uppercase tracking-wide text-brand-ink">
                       {b.bairro}
+                      {parceria && <SeloParceira pct={parceria.descontoPct} />}
                     </div>
                     <div className="mt-0.5 truncate text-[15.5px] font-semibold leading-5">
                       {b.nome}
