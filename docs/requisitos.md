@@ -24,6 +24,8 @@ O que o sistema deve fazer. Cada RF atende a um ou mais requisitos de usuário (
 
 ### Barbeiro
 
+A conta de barbeiro enxerga só a própria barbearia (no Início, no mapa, nos favoritos e para reservar).
+
 | ID | O sistema deve permitir ao barbeiro… |
 |---|---|
 | RF08 | Configurar a jornada: dias, início, fim e duração do intervalo (30 a 120 min) |
@@ -31,11 +33,21 @@ O que o sistema deve fazer. Cada RF atende a um ou mais requisitos de usuário (
 | RF10 | Bloquear e liberar horários livres da própria agenda |
 | RF11 | Ver os atendimentos com o nome do cliente e encerrar como Finalizado ou Não compareceu |
 | RF12 | Acompanhar o painel: atendimentos do dia e da semana, faturado no mês, nota média |
+
+### Dono da barbearia
+
+O dono também é barbeiro da unidade (tem a própria agenda) e, além disso, gerencia a barbearia.
+
+| ID | O sistema deve permitir ao dono… |
+|---|---|
 | RF13 | Cadastrar e editar serviços com nome, preço e duração |
 | RF14 | Editar a unidade: descrição, contato, horário de atendimento e foto de capa |
 | RF15 | Assinar um plano mensal, começando com 30 dias de teste grátis |
 | RF16 | Ver a situação da assinatura (em teste, ativa, aguardando pagamento, cancelada, vencida), trocar de plano, renovar ou cancelar |
 | RF17 | Aderir à parceria BarberHUB, definindo o preço diferenciado (10% a 30% de desconto pelo app) e o período (30 ou 90 dias) |
+| RF19 | Gerenciar a equipe: adicionar, editar e remover barbeiros (dentro do limite do plano) e convidá-los pelo e-mail de acesso |
+| RF20 | Ajustar a jornada e bloquear ou liberar horários de qualquer barbeiro da equipe |
+| RF21 | Ver as reservas de toda a unidade e encerrar atendimentos de qualquer barbeiro |
 
 ### Cliente (parcerias)
 
@@ -77,11 +89,13 @@ Como o sistema deve se comportar.
 | RN01 | Só se reserva horário Livre e futuro, e o serviço precisa caber no intervalo |
 | RN02 | Cada cliente tem no máximo 3 reservas futuras e nenhuma no mesmo horário |
 | RN03 | Cancelar ou remarcar só até 2h antes; o horário antigo volta a Livre |
-| RN04 | Só o barbeiro atribuído encerra, e só depois do início do atendimento |
+| RN04 | Só o barbeiro atribuído (ou o dono da unidade) encerra, e só depois do início do atendimento |
 | RN05 | Só o titular avalia (nota de 1 a 5), e só atendimentos Finalizados |
 | RN06 | Jornada padrão: Seg a Sáb, 10:00 às 17:30, intervalos de 90 min; raio padrão de 5 km |
 | RN07 | Pagamento do atendimento feito no estabelecimento, em dinheiro, Pix ou cartão |
 | RN08 | A barbearia só aparece na busca e no mapa, e só recebe reservas novas, com assinatura em teste ou paga dentro do prazo. Cancelada, segue no ar até o fim do período |
+| RN10 | Conta de barbeiro só vê e só reserva na própria barbearia. Só o dono mexe em serviços, dados da unidade, plano, parceria e equipe; o barbeiro comum cuida só da própria agenda |
+| RN11 | Barbeiro removido sai do catálogo e perde o acesso (volta a Cliente); reservas antigas e avaliações ficam. Não se remove quem tem reserva confirmada, nem o próprio dono |
 | RN09 | A parceira só fica em destaque enquanto oferece o preço diferenciado (parceria aprovada e dentro do período), sempre com o selo "Parceira". A ordem da busca continua sendo a distância |
 
 ### Modelo de receita
@@ -102,7 +116,7 @@ Não há gateway de pagamento no app: a equipe envia a cobrança (Pix ou boleto)
 - **Interface:** React 18, TypeScript, Vite e Tailwind. Telas → estado → regras → repositório.
 - **Backend:** Supabase — PostgreSQL com RLS, Auth por e-mail, Realtime e Storage de fotos. Região São Paulo.
 - **Entrega:** site em produção na Vercel; app Android e iOS pelo Capacitor, com GPS e notificações nativas.
-- Mapa com Leaflet + OpenStreetMap · 11 tabelas no banco · 15 funções SQL de regra (e 3 de administração) · CI com GitHub Actions + Vitest.
+- Mapa com Leaflet + OpenStreetMap · 11 tabelas no banco · 18 funções SQL de regra (e 3 de administração) · CI com GitHub Actions + Vitest.
 
 Detalhes em [arquitetura.md](arquitetura.md) e [banco-de-dados.md](banco-de-dados.md).
 
@@ -129,6 +143,7 @@ Detalhes em [arquitetura.md](arquitetura.md) e [banco-de-dados.md](banco-de-dado
 | **RU04** remarcar se surgir um imprevisto | **RU09** registrar quem faltou |
 | **RU05** avaliar e ver a nota dos outros | **RU10** saber quanto faturei no mês |
 | **RU12** encontrar parceiras com preço especial | **RU11** assinar um plano e virar parceira para atrair clientes |
+| | **RU13** (dono) montar e gerenciar a equipe e a agenda de cada barbeiro |
 
 ## 6. Rastreabilidade
 
@@ -141,6 +156,7 @@ Negócio e usuário originam os funcionais e não funcionais; o sistema detalha 
 | RN-O3 Ocupação | RU05 a RU08 | RF07 a RF10 | RNF02 | RS03, RS07 |
 | RN-O4 Custo | RU10 | RF12 a RF14 | RNF07 | RS02, RS04 |
 | RN-O5 Receita | RU11, RU12 | RF15 a RF18 | RNF01, RNF07 | RS08 |
+| RN-O3 Ocupação | RU13 | RF19 a RF21 | RNF01 | RS03 |
 
 ## 7. Onde cada regra está no código
 
@@ -155,5 +171,8 @@ Negócio e usuário originam os funcionais e não funcionais; o sistema detalha 
 | RN09 | `parceriaVigente`, `precoNoApp` | policy "parcerias em vigor" + desconto em `regras_reserva_barbearia` |
 | RF15, RF16 | `escolherPlano`, `cancelarAssinatura` | `escolher_plano`, `cancelar_assinatura` |
 | RF17 | `solicitarParceria`, `encerrarParceria` | `solicitar_parceria`, `encerrar_parceria` |
+| RF19, RN11 | `salvarProfissional`, `removerProfissional`, `equipeDe` | `salvar_profissional`, `remover_profissional`, `minha_equipe` |
+| RF20 | `salvarJornada`, `alternarBloqueio`, `podeGerir` | `salvar_jornada(jornada, profissional)`, `alternar_bloqueio`, `exigir_gestao_profissional` |
+| RN10 | `barbeariaPermitida`, `ehDono` | `meu_perfil_dono`, policies "(dono)", trigger `regras_reserva_barbearia` |
 | RNF01 | — | RLS nas 11 tabelas |
 | RNF08 | `rules.test.ts` | CI no GitHub Actions |

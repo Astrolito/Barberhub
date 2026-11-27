@@ -4,7 +4,7 @@ import { useApp, useUsuario } from '../state/AppContext'
 import { Capa, Empty, Estrelas, Field, Note, Page, PrecoApp, Row, SearchInput, SectionTitle, SeloParceira, TopBar, cx } from '../components/ui'
 import { IChat, IClock, IHeart, IPhone, IPin, IRepeat, IScissors, IconeServico } from '../components/Icons'
 import { brl, dataLonga } from '../lib/format'
-import { barbeariaVisivel, jornadaDe, notaDaBarbearia, parceriaVigente, precoNoApp, resumoJornada } from '../domain/rules'
+import { barbeariaPermitida, barbeariaVisivel, equipeAtiva, jornadaDe, notaDaBarbearia, parceriaVigente, precoNoApp, resumoJornada } from '../domain/rules'
 import type { Barbearia as TBarbearia, Profissional } from '../domain/types'
 
 const fone = (d: string) => (d.length === 11 ? `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}` : `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`)
@@ -56,11 +56,11 @@ export default function Barbearia() {
   const [qp, setQp] = useState('')
   const [pop, setPop] = useState(0)
   const b = db.barbearias.find((x) => x.id === id)
-  if (!b) return <NaoEncontrado />
+  if (!b || !barbeariaPermitida(u, b.id)) return <NaoEncontrado />
 
   const fav = u.favoritos.includes(b.id)
   const servicos = db.servicos.filter((s) => s.barbeariaId === b.id && s.disponivel && s.nome.toLowerCase().includes(qs.toLowerCase()))
-  const todosProfs = db.profissionais.filter((p) => p.barbeariaId === b.id)
+  const todosProfs = equipeAtiva(db, b.id)
   const profs = todosProfs.filter((p) => p.nome.toLowerCase().includes(qp.toLowerCase()))
   const emDia = barbeariaVisivel(b)
   const temAgenda = todosProfs.length > 0 && emDia
@@ -250,10 +250,11 @@ export function NaoEncontrado() {
 export function ServicoDetalhe() {
   const { id } = useParams()
   const { db } = useApp()
+  const u = useUsuario()
   const s = db.servicos.find((x) => x.id === id)
-  if (!s) return <NaoEncontrado />
+  if (!s || !barbeariaPermitida(u, s.barbeariaId)) return <NaoEncontrado />
   const b = db.barbearias.find((x) => x.id === s.barbeariaId)
-  const profs = db.profissionais.filter((p) => p.barbeariaId === s.barbeariaId)
+  const profs = equipeAtiva(db, s.barbeariaId)
   return (
     <>
       <TopBar title={s.nome} />

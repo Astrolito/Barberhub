@@ -5,7 +5,7 @@ import { Button, Empty, Note, Page, Row, TopBar, cx } from '../components/ui'
 import { ICalendar, ICamera, ICard, IHeart, IHistory, ILogout, IScissors, IWallet } from '../components/Icons'
 import { CardBarbearia } from './Home'
 import { OPCOES_DISTANCIA } from '../data/seed'
-import { raioAplicado } from '../domain/rules'
+import { barbeariaPermitida, raioAplicado } from '../domain/rules'
 import { lerImagem } from '../lib/image'
 
 export function Avatar({ nome, foto, size = 'lg' }: { nome: string; foto?: string; size?: 'lg' | 'sm' }) {
@@ -171,7 +171,7 @@ export function Favoritos() {
   const { db } = useApp()
   const u = useUsuario()
   const nav = useNavigate()
-  const lista = db.barbearias.filter((b) => u.favoritos.includes(b.id))
+  const lista = db.barbearias.filter((b) => u.favoritos.includes(b.id) && barbeariaPermitida(u, b.id))
   return (
     <Page className="pt-4">
       <h1 className="text-[28px] font-bold tracking-tight">Favoritos</h1>

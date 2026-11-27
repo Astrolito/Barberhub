@@ -9,6 +9,8 @@ import {
   assinaturaDe,
   parceriaAberta,
   parceriaVigente,
+  ehDono,
+  equipeAtiva,
   situacaoAssinatura,
   type SituacaoAssinatura,
 } from '../../domain/rules'
@@ -33,12 +35,12 @@ export default function PlanoBarbearia() {
   const [dias, setDias] = useState(30)
   const [confirmarCancelar, setConfirmarCancelar] = useState(false)
 
-  if (u.papel !== 'Barbeiro' || !u.barbeariaId)
+  if (!ehDono(u) || !u.barbeariaId)
     return (
       <>
         <TopBar title="Plano e parceria" />
         <Page>
-          <Empty icon={<IScissors />} title="Acesso restrito" text="Esta área é exclusiva para barbeiros com vínculo a uma barbearia." />
+          <Empty icon={<IScissors />} title="Acesso restrito" text="Só o dono da barbearia gerencia o plano e a parceria." />
         </Page>
       </>
     )
@@ -47,7 +49,7 @@ export default function PlanoBarbearia() {
   const situacao = situacaoAssinatura(a)
   const emDia = situacao !== 'Vencida' && situacao !== 'Sem assinatura'
   const plano = db.planos.find((p) => p.id === a?.planoId)
-  const equipe = db.profissionais.filter((p) => p.barbeariaId === u.barbeariaId).length
+  const equipe = equipeAtiva(db, u.barbeariaId).length
   const vigente = parceriaVigente(db, u.barbeariaId)
   const aberta = parceriaAberta(db, u.barbeariaId)
   const historico = db.parcerias

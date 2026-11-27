@@ -90,8 +90,19 @@ export function criarBackendLocal(): Backend {
     async alternarBloqueio(id) {
       commit(R.alternarBloqueio(db, id, eu()))
     },
-    async salvarJornada(j) {
-      commit(R.salvarJornada(db, eu(), j))
+    async salvarJornada(j, p) {
+      commit(R.salvarJornada(db, eu(), j, p))
+    },
+    async equipe() {
+      return R.equipeDe(db, eu())
+    },
+    async salvarProfissional(p) {
+      const r = R.salvarProfissional(db, eu(), p)
+      commit(r.db)
+      return r.profissional
+    },
+    async removerProfissional(id) {
+      commit(R.removerProfissional(db, eu(), id))
     },
     async salvarServico(s) {
       const r = R.salvarServico(db, eu(), s)
@@ -109,7 +120,7 @@ export function criarBackendLocal(): Backend {
     },
     async atualizarFotoBarbearia(id, foto) {
       const u = eu()
-      if (u.papel !== 'Barbeiro' || u.barbeariaId !== id) throw new R.RegraError('Apenas o barbeiro vinculado pode alterar a foto.')
+      if (!R.ehDono(u) || u.barbeariaId !== id) throw new R.RegraError('Apenas o dono da barbearia pode alterar a foto.')
       commit({ ...db, barbearias: db.barbearias.map((b) => (b.id === id ? { ...b, fotoCapa: foto } : b)) })
     },
     async escolherPlano(planoId) {

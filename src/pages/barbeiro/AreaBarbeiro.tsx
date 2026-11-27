@@ -2,23 +2,46 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useApp, useUsuario } from '../../state/AppContext'
 import { Button, Campo, Capa, Empty, Note, Page, Row, Sheet, StatusLabel, Switch, TopBar, cx, inputCls } from '../../components/ui'
-import { ICalendar, ICamera, IChevron, IClock, IList, ILock, IPlus, IScissors, IStore, ITag, IUnlock, IconeServico } from '../../components/Icons'
+import { ICalendar, ICamera, IChevron, IClock, IList, ILock, IPlus, IScissors, IStore, ITag, IUnlock, IUsers, IconeServico } from '../../components/Icons'
 import { lerImagem } from '../../lib/image'
 import { brlFull, dataHoraLonga, diaLocal, hora } from '../../lib/format'
-import { INTERVALOS_PERMITIDOS, aguardandoBarbeiro, assinaturaDe, parceriaVigente, situacaoAssinatura, iniciosDoDia, jornadaDe, resumoBarbeiro, resumoJornada, validarJornada, type ServicoEditavel } from '../../domain/rules'
+import { INTERVALOS_PERMITIDOS, aguardandoBarbeiro, assinaturaDe, ehDono, equipeAtiva, podeGerir, parceriaVigente, situacaoAssinatura, iniciosDoDia, jornadaDe, resumoBarbeiro, resumoJornada, validarJornada, type ServicoEditavel } from '../../domain/rules'
 import type { IconeServico as TIcone, Jornada, Servico } from '../../domain/types'
 
-function useGuard() {
+export function useGuard() {
   const u = useUsuario()
   return u.papel === 'Barbeiro' && u.profissionalId ? u : null
 }
 
-function SemAcesso() {
+/** Só o dono da unidade: equipe, serviços, dados da unidade, plano e parceria. */
+export function useDono() {
+  const u = useGuard()
+  return ehDono(u) ? u : null
+}
+
+/** Profissional cuja agenda a tela mostra: o próprio, ou (dono) quem veio em ?prof=. */
+function useAlvo() {
+  const u = useGuard()
+  const { db } = useApp()
+  const [params] = useSearchParams()
+  const pedido = params.get('prof')
+  if (!u) return null
+  const id = pedido ?? u.profissionalId!
+  if (!podeGerir(db, u, id)) return null
+  const prof = db.profissionais.find((p) => p.id === id)
+  return { u, id, prof, outro: id !== u.profissionalId }
+}
+
+export function SemAcesso({ dono }: { dono?: boolean }) {
   return (
     <>
       <TopBar title="Área do barbeiro" />
       <Page>
-        <Empty icon={<IScissors />} title="Acesso restrito" text="Esta área é exclusiva para barbeiros com vínculo a uma barbearia." />
+        <Empty
+          icon={<IScissors />}
+          title="Acesso restrito"
+          text={dono ? 'Só o dono da barbearia pode gerenciar isto. Fale com ele se precisar de uma mudança.' : 'Esta área é exclusiva para barbeiros com vínculo a uma barbearia.'}
+        />
       </Page>
     </>
   )
@@ -40,6 +63,9 @@ export default function AreaBarbeiro() {
   if (!u) return <SemAcesso />
   const r = resumoBarbeiro(db, u.profissionalId!)
   const prof = db.profissionais.find((p) => p.id === u.profissionalId)
+  const dono = ehDono(u)
+  const unidade = db.barbearias.find((b) => b.id === u.barbeariaId)
+  const equipe = equipeAtiva(db, u.barbeariaId)
   const assinatura = assinaturaDe(db, u.barbeariaId)
   const situacao = situacaoAssinatura(assinatura)
   const parceria = u.barbeariaId ? parceriaVigente(db, u.barbeariaId) : undefined
@@ -57,19 +83,26 @@ export default function AreaBarbeiro() {
               ? 'Vencida: renove para aparecer na busca'
               : 'Escolha um plano'
   const cards = [
-    { to: '/barbeiro/atendimentos', icon: <ICalendar />, title: 'Atendimentos', text: r.pendentes ? `${r.pendentes} aguardando você` : 'Próximos e histórico' },
+    { to: '/barbeiro/atendimentos', icon: <ICalendar />, title: 'Atendimentos', text: r.pendentes ? `${r.pendentes} aguardando você` : dono ? 'Seus e da equipe' : 'Próximos e histórico' },
     { to: '/barbeiro/horarios', icon: <IClock />, title: 'Meus horários', text: 'Bloquear e liberar intervalos' },
     { to: '/barbeiro/agenda', icon: <ICalendar />, title: 'Minha agenda', text: resumoJornada(jornadaDe(prof)) },
-    { to: '/barbeiro/servicos', icon: <IList />, title: 'Serviços', text: 'Preços, duração e disponibilidade' },
-    { to: '/barbeiro/barbearia', icon: <IStore />, title: 'Minha barbearia', text: 'Foto, descrição e contato' },
-    { to: '/barbeiro/plano', icon: <ITag />, title: 'Plano e parceria', text: textoPlano },
+    ...(dono
+      ? [
+          { to: '/barbeiro/equipe', icon: <IUsers />, title: 'Equipe', text: `${equipe.length} barbeiro${equipe.length === 1 ? '' : 's'} · agendas e convites` },
+          { to: '/barbeiro/servicos', icon: <IList />, title: 'Serviços', text: 'Preços, duração e disponibilidade' },
+          { to: '/barbeiro/barbearia', icon: <IStore />, title: 'Minha barbearia', text: 'Foto, descrição e contato' },
+          { to: '/barbeiro/plano', icon: <ITag />, title: 'Plano e parceria', text: textoPlano },
+        ]
+      : []),
   ]
   return (
     <>
-      <TopBar title="Área do barbeiro" />
+      <TopBar title={dono ? 'Área do dono' : 'Área do barbeiro'} />
       <Page className="pt-3">
-        <h1 className="text-[28px] font-bold tracking-tight">Área do barbeiro</h1>
-        <p className="mt-1 text-[15.5px] text-muted">{prof?.nome}</p>
+        <h1 className="text-[28px] font-bold tracking-tight">{dono ? 'Área do dono' : 'Área do barbeiro'}</h1>
+        <p className="mt-1 text-[15.5px] text-muted">
+          {prof?.nome} · {dono ? 'Dono' : 'Barbeiro'} da {unidade?.nome ?? 'barbearia'}
+        </p>
 
         <div className="mt-5 grid grid-cols-2 gap-2.5">
           <Numero rotulo="Hoje" valor={String(r.hoje)} detalhe={`previsto ${brlFull(r.previstoHoje)}`} />
@@ -83,13 +116,14 @@ export default function AreaBarbeiro() {
             <IChevron size={18} />
           </Link>
         )}
-        {(situacao === 'Vencida' || situacao === 'Sem assinatura') && (
+        {dono && (situacao === 'Vencida' || situacao === 'Sem assinatura') && (
           <Link to="/barbeiro/plano" className="press mt-2.5 flex items-center justify-between rounded-2xl border border-red-400/40 bg-red-500/10 p-3.5 text-[15px] font-medium text-red-200">
             Assinatura vencida: sua barbearia saiu da busca. Renovar
             <IChevron size={18} />
           </Link>
         )}
-        <p className="mt-2 text-[12.5px] text-faint">Valores pelos preços reservados. Pagamento no estabelecimento.</p>
+        <p className="mt-2 text-[12.5px] text-faint">Seus números, pelos preços reservados. Pagamento no estabelecimento.</p>
+        {!dono && <p className="mt-1 text-[12.5px] text-faint">Serviços, dados da unidade e plano são geridos pelo dono da barbearia.</p>}
 
         <div className="mt-6 space-y-3">
           {cards.map((c, i) => (
@@ -111,7 +145,7 @@ export default function AreaBarbeiro() {
 const fone = (d?: string) => (!d ? '' : d.length === 11 ? `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}` : `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`)
 
 export function MinhaBarbearia() {
-  const u = useGuard()
+  const u = useDono()
   const { db, atualizarFotoBarbearia, atualizarBarbearia, toast } = useApp()
   const input = useRef<HTMLInputElement>(null)
   const b = db.barbearias.find((x) => x.id === u?.barbeariaId)
@@ -119,7 +153,7 @@ export function MinhaBarbearia() {
   const [whatsapp, setWhatsapp] = useState(fone(b?.whatsapp))
   const [telefone, setTelefone] = useState(fone(b?.telefone))
   const [enviando, setEnviando] = useState<'foto' | 'dados' | null>(null)
-  if (!u || !b) return <SemAcesso />
+  if (!u || !b) return <SemAcesso dono />
   return (
     <>
       <TopBar title="Minha barbearia" />
@@ -196,7 +230,14 @@ export function Atendimentos() {
   const inicial = params.get('aba')
   const [aba, setAba] = useState<'proximos' | 'pendentes' | 'historico'>(inicial === 'pendentes' ? 'pendentes' : 'proximos')
   const [enviando, setEnviando] = useState<string | null>(null)
-  const meus = useMemo(() => (u ? db.agendamentos.filter((a) => a.profissionalId === u.profissionalId) : []), [db, u])
+  const dono = ehDono(u)
+  // Dono escolhe de quem ver: os próprios, de um barbeiro ou de toda a equipe.
+  const [de, setDe] = useState<string>(params.get('prof') ?? u?.profissionalId ?? '')
+  const equipe = dono ? equipeAtiva(db, u!.barbeariaId) : []
+  const meus = useMemo(
+    () => (u ? db.agendamentos.filter((a) => (dono && de === 'todos' ? a.barbeariaId === u.barbeariaId : a.profissionalId === (dono ? de : u.profissionalId))) : []),
+    [db, u, dono, de],
+  )
   const pendentes = meus.filter(aguardandoBarbeiro)
   const lista = useMemo(() => {
     if (aba === 'pendentes') return [...pendentes].sort((a, b) => a.inicio.localeCompare(b.inicio))
@@ -206,6 +247,7 @@ export function Atendimentos() {
   }, [meus, aba])
   if (!u) return <SemAcesso />
   const nomeServ = (id: string) => db.servicos.find((s) => s.id === id)?.nome
+  const nomeProf = (id: string) => db.profissionais.find((p) => p.id === id)?.nome
   const encerrarUm = async (id: string, r: 'Finalizado' | 'Não compareceu') => {
     setEnviando(id)
     await encerrar(id, r)
@@ -216,6 +258,16 @@ export function Atendimentos() {
       <TopBar title="Atendimentos" />
       <Page className="pt-3">
         <h1 className="text-[28px] font-bold tracking-tight">Atendimentos</h1>
+        {dono && (
+          <select value={de} onChange={(e) => setDe(e.target.value)} className={cx(inputCls, 'mt-4 appearance-none')} aria-label="Barbeiro">
+            {equipe.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.id === u.profissionalId ? `Meus (${p.nome})` : p.nome}
+              </option>
+            ))}
+            <option value="todos">Toda a equipe</option>
+          </select>
+        )}
         <Segmented
           value={aba}
           onChange={setAba}
@@ -237,6 +289,7 @@ export function Atendimentos() {
                   <div className="text-[16px] font-semibold">
                     {a.clienteNome ?? 'Cliente'} · {nomeServ(a.servicoId)}
                   </div>
+                  {dono && de === 'todos' && <div className="text-[13.5px] text-faint">com {nomeProf(a.profissionalId)}</div>}
                   <div className="text-[14.5px] text-muted">{dataHoraLonga(a.inicio)}</div>
                 </button>
                 {aguardandoBarbeiro(a) && (
@@ -256,7 +309,7 @@ export function Atendimentos() {
           <Empty
             icon={<ICalendar />}
             title={aba === 'proximos' ? 'Nenhum atendimento marcado' : aba === 'pendentes' ? 'Tudo em dia' : 'Sem histórico'}
-            text={aba === 'pendentes' ? 'Nenhum atendimento esperando finalização.' : 'As reservas atribuídas a você aparecem aqui.'}
+            text={aba === 'pendentes' ? 'Nenhum atendimento esperando finalização.' : dono && de !== u.profissionalId ? 'As reservas deste filtro aparecem aqui.' : 'As reservas atribuídas a você aparecem aqui.'}
           />
         )}
       </Page>
@@ -265,26 +318,27 @@ export function Atendimentos() {
 }
 
 export function MeusHorarios() {
-  const u = useGuard()
+  const alvo = useAlvo()
   const { db, alternarBloqueio, prepararHorarios } = useApp()
   const [dia, setDia] = useState(diaLocal())
-  const prof = db.profissionais.find((p) => p.id === u?.profissionalId)
+  const prof = alvo?.prof
   useEffect(() => {
-    if (u?.profissionalId) prepararHorarios(u.profissionalId, dia)
+    if (alvo?.id) prepararHorarios(alvo.id, dia)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [u?.profissionalId, dia, prof?.jornada])
-  if (!u) return <SemAcesso />
+  }, [alvo?.id, dia, prof?.jornada])
+  if (!alvo) return <SemAcesso dono />
+  const titulo = alvo.outro ? `Horários de ${prof?.nome.split(' ')[0]}` : 'Meus horários'
   const lista = db.horarios
-    .filter((h) => h.profissionalId === u.profissionalId && diaLocal(new Date(h.inicio)) === dia)
+    .filter((h) => h.profissionalId === alvo.id && diaLocal(new Date(h.inicio)) === dia)
     .sort((a, b) => a.inicio.localeCompare(b.inicio))
   return (
     <>
-      <TopBar title="Meus horários" />
+      <TopBar title={titulo} />
       <Page className="pt-3">
-        <h1 className="text-[28px] font-bold tracking-tight">Meus horários</h1>
+        <h1 className="text-[28px] font-bold tracking-tight">{titulo}</h1>
         <p className="mt-1 text-[15px] text-muted">
           {resumoJornada(jornadaDe(prof))}.{' '}
-          <Link to="/barbeiro/agenda" className="font-semibold text-brand-ink">
+          <Link to={alvo.outro ? `/barbeiro/agenda?prof=${alvo.id}` : '/barbeiro/agenda'} className="font-semibold text-brand-ink">
             Alterar agenda
           </Link>
         </p>
@@ -326,7 +380,7 @@ export function MeusHorarios() {
             })}
           </div>
         ) : (
-          <Empty icon={<IClock />} title="Nenhum intervalo neste dia" text="Você não atende neste dia ou os horários já passaram. Ajuste em Minha agenda." />
+          <Empty icon={<IClock />} title="Nenhum intervalo neste dia" text={alvo.outro ? 'Não há atendimento neste dia ou os horários já passaram. Ajuste a agenda.' : 'Você não atende neste dia ou os horários já passaram. Ajuste em Minha agenda.'} />
         )}
       </Page>
     </>
@@ -337,10 +391,10 @@ const DIAS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
 
 /** Agenda configurável: dias, expediente e duração de cada intervalo. */
 export function MinhaAgenda() {
-  const u = useGuard()
-  const { db, salvarJornada } = useApp()
+  const alvo = useAlvo()
+  const { salvarJornada } = useApp()
   const nav = useNavigate()
-  const prof = db.profissionais.find((p) => p.id === u?.profissionalId)
+  const prof = alvo?.prof
   const [j, setJ] = useState<Jornada>(jornadaDe(prof))
   const [enviando, setEnviando] = useState(false)
   const erro = useMemo(() => {
@@ -353,13 +407,16 @@ export function MinhaAgenda() {
   }, [j])
   // Prévia de um dia atendido (segunda-feira de referência).
   const previa = useMemo(() => (erro ? [] : iniciosDoDia({ ...j, dias: [1] }, '2026-11-23')), [j, erro])
-  if (!u) return <SemAcesso />
+  if (!alvo) return <SemAcesso dono />
+  const titulo = alvo.outro ? `Agenda de ${prof?.nome.split(' ')[0]}` : 'Minha agenda'
   return (
     <>
-      <TopBar title="Minha agenda" />
+      <TopBar title={titulo} />
       <Page className="pt-3">
-        <h1 className="text-[28px] font-bold tracking-tight">Minha agenda</h1>
-        <p className="mt-1 text-[15px] text-muted">Defina quando você atende. Os clientes só veem horários dentro desta agenda.</p>
+        <h1 className="text-[28px] font-bold tracking-tight">{titulo}</h1>
+        <p className="mt-1 text-[15px] text-muted">
+          {alvo.outro ? `Defina quando ${prof?.nome} atende.` : 'Defina quando você atende.'} Os clientes só veem horários dentro desta agenda.
+        </p>
 
         <h2 className="mt-6 text-[15px] font-semibold">Dias de atendimento</h2>
         <div className="mt-2 grid grid-cols-7 gap-1.5">
@@ -416,9 +473,9 @@ export function MinhaAgenda() {
           disabled={!!erro || enviando}
           onClick={async () => {
             setEnviando(true)
-            const ok = await salvarJornada(j)
+            const ok = await salvarJornada(j, alvo.outro ? alvo.id : undefined)
             setEnviando(false)
-            if (ok) nav('/barbeiro/horarios')
+            if (ok) nav(alvo.outro ? `/barbeiro/horarios?prof=${alvo.id}` : '/barbeiro/horarios')
           }}
         >
           {enviando ? 'Salvando…' : 'Salvar agenda'}
@@ -438,11 +495,11 @@ const novoServico = (): ServicoEditavel => ({ nome: '', descricao: '', preco: 0,
 
 /** Serviços da unidade: o barbeiro cria, edita e pausa. */
 export function Servicos() {
-  const u = useGuard()
+  const u = useDono()
   const { db, salvarServico } = useApp()
   const [editando, setEditando] = useState<ServicoEditavel | null>(null)
   const [enviando, setEnviando] = useState(false)
-  if (!u) return <SemAcesso />
+  if (!u) return <SemAcesso dono />
   const lista = db.servicos.filter((s) => s.barbeariaId === u.barbeariaId).sort((a, b) => Number(b.disponivel) - Number(a.disponivel) || a.nome.localeCompare(b.nome))
   const prof = db.profissionais.find((p) => p.id === u.profissionalId)
   const intervalo = jornadaDe(prof).intervaloMin

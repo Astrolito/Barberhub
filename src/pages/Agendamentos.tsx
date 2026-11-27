@@ -4,7 +4,7 @@ import { useApp, useUsuario } from '../state/AppContext'
 import { Button, Empty, Estrelas, Field, Note, Page, Row, SearchInput, Sheet, StatusLabel, TopBar } from '../components/ui'
 import { ICalendar, ICheck, IHistory, IRepeat, IX } from '../components/Icons'
 import { NaoEncontrado, Contato } from './Barbearia'
-import { ANTECEDENCIA_CANCELAR_MIN, aguardandoBarbeiro, noHistorico, podeAlterar, terminoServico } from '../domain/rules'
+import { ANTECEDENCIA_CANCELAR_MIN, aguardandoBarbeiro, ehDono, noHistorico, podeAlterar, terminoServico } from '../domain/rules'
 import { brlFull, dataHoraLonga, hora } from '../lib/format'
 import { baixarIcs, linkGoogleAgenda } from '../lib/calendario'
 import type { Agendamento } from '../domain/types'
@@ -84,10 +84,12 @@ export function AgendamentoDetalhe() {
   const [folha, setFolha] = useState<'cancelar' | 'falta' | null>(null)
   const [enviando, setEnviando] = useState(false)
   const a = db.agendamentos.find((x) => x.id === id)
-  if (!a || (a.clienteEmail !== u.email && a.profissionalId !== u.profissionalId)) return <NaoEncontrado />
+  const donoDaUnidade = !!a && ehDono(u) && u.barbeariaId === a.barbeariaId
+  if (!a || (a.clienteEmail !== u.email && a.profissionalId !== u.profissionalId && !donoDaUnidade)) return <NaoEncontrado />
 
   const ehTitular = a.clienteEmail === u.email
-  const ehBarbeiro = u.papel === 'Barbeiro' && u.profissionalId === a.profissionalId
+  // O barbeiro atribuído ou o dono da unidade finalizam e registram falta.
+  const ehBarbeiro = (u.papel === 'Barbeiro' && u.profissionalId === a.profissionalId) || donoDaUnidade
   const preco = a.precoReservado ?? db.servicos.find((s) => s.id === a.servicoId)?.preco
   const fimServico = terminoServico(db, a)
   const b = db.barbearias.find((x) => x.id === a.barbeariaId)

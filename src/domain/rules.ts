@@ -3,7 +3,7 @@
 // ou lançam RegraError. No modo Supabase as mesmas regras rodam em funções SQL
 // (supabase/migrations), e os limites abaixo precisam ficar iguais aos de lá.
 
-import type { Agendamento, Assinatura, Avaliacao, Banco, Barbearia, Horario, Jornada, Parceria, Profissional, Servico, StatusAssinatura, Usuario } from './types'
+import type { Agendamento, Assinatura, Avaliacao, Banco, Barbearia, Horario, Jornada, MembroEquipe, Parceria, Profissional, Servico, StatusAssinatura, Usuario } from './types'
 import { RAIO_PADRAO_KM } from '../data/seed'
 import { uuid } from '../lib/id'
 
@@ -27,6 +27,13 @@ const ehFuturo = (iso: string) => new Date(iso).getTime() > agora()
 
 export const raioAplicado = (u: Usuario) => u.raioBuscaKm ?? RAIO_PADRAO_KM
 export const jornadaDe = (p: Profissional | undefined) => p?.jornada ?? JORNADA_PADRAO
+/** Barbeiro ainda na equipe (o dono pode removê-lo; o histórico fica). */
+export const profissionalAtivo = (p: Profissional) => p.ativo !== false
+/** Equipe atual da unidade, na ordem do cadastro. */
+export const equipeAtiva = (db: Banco, barbeariaId: string | undefined) => db.profissionais.filter((p) => p.barbeariaId === barbeariaId && profissionalAtivo(p))
+/** Conta de barbeiro só enxerga a própria barbearia; cliente vê todas. */
+export const barbeariaPermitida = (u: Usuario, barbeariaId: string) => u.papel !== 'Barbeiro' || u.barbeariaId === barbeariaId
+export const ehDono = (u: Usuario | null | undefined) => !!u && u.papel === 'Barbeiro' && !!u.dono && !!u.barbeariaId
 
 const minutos = (hhmm: string) => {
   const [h, m] = hhmm.split(':').map(Number)
@@ -68,7 +75,7 @@ export function resumoJornada(j: Jornada) {
  */
 export function prepararHorarios(db: Banco, profissionalId: string, dia: string): Banco {
   const prof = db.profissionais.find((p) => p.id === profissionalId)
-  if (!prof) throw new RegraError('Profissional não encontrado.')
+  if (!prof || !profissionalAtivo(prof)) throw new RegraError('Profissional não encontrado.')
   if (!prof.barbeariaId) throw new RegraError('Profissional sem vínculo com barbearia.')
   const [y, m, d] = dia.split('-').map(Number)
   const hoje = new Date(agora())
@@ -149,6 +156,9 @@ export function confirmarAgendamento(
   if (!servico) throw new RegraError('Escolha um serviço.')
   if (reservasAtivas(db, args.cliente.email).length >= LIMITE_RESERVAS_ATIVAS)
     throw new RegraError(`Você já tem ${LIMITE_RESERVAS_ATIVAS} reservas futuras. Conclua ou cancele uma para agendar outra.`)
+  if (!barbeariaPermitida(args.cliente, horario.barbeariaId)) throw new RegraError('Contas de barbeiro só acessam a própria barbearia.')
+  const prof = db.profissionais.find((p) => p.id === horario.profissionalId)
+  if (!prof || !profissionalAtivo(prof)) throw new RegraError('Este barbeiro não atende mais nesta unidade.')
   verificarHorarioParaReserva(db, horario, servico, args.cliente.email)
   exigirBarbeariaEmDia(db, horario.barbeariaId)
 
@@ -241,8 +251,9 @@ export function remarcarAgendamento(db: Banco, agendamentoId: string, novoHorari
 export function encerrarAtendimento(db: Banco, agendamentoId: string, usuario: Usuario, resultado: 'Finalizado' | 'Não compareceu'): Banco {
   const ag = db.agendamentos.find((a) => a.id === agendamentoId)
   if (!ag) throw new RegraError('Agendamento não encontrado.')
-  if (usuario.papel !== 'Barbeiro' || usuario.profissionalId !== ag.profissionalId)
-    throw new RegraError('Apenas o profissional atribuído pode encerrar o atendimento.')
+  const atribuido = usuario.papel === 'Barbeiro' && usuario.profissionalId === ag.profissionalId
+  if (!atribuido && !(ehDono(usuario) && usuario.barbeariaId === ag.barbeariaId))
+    throw new RegraError('Apenas o profissional atribuído ou o dono podem encerrar o atendimento.')
   if (ag.status !== 'Confirmado') throw new RegraError('Só reservas confirmadas podem ser encerradas.')
   if (ehFuturo(ag.inicio)) throw new RegraError('O atendimento ainda não começou.')
   const ts = new Date(agora()).toISOString()
@@ -259,8 +270,7 @@ export const aguardandoBarbeiro = (a: Agendamento) => a.status === 'Confirmado' 
 export function alternarBloqueio(db: Banco, horarioId: string, usuario: Usuario): Banco {
   const h = db.horarios.find((x) => x.id === horarioId)
   if (!h) throw new RegraError('Horário não encontrado.')
-  if (usuario.papel !== 'Barbeiro' || usuario.profissionalId !== h.profissionalId)
-    throw new RegraError('Apenas o profissional do horário pode alterar.')
+  exigirGestao(db, usuario, h.profissionalId)
   if (h.status === 'Ocupado') throw new RegraError('Horário ocupado por uma reserva.')
   const status = h.status === 'Livre' ? 'Bloqueado' : 'Livre'
   return { ...db, horarios: db.horarios.map((x) => (x.id === h.id ? { ...x, status } : x)) }
@@ -272,11 +282,120 @@ function exigirBarbeiro(usuario: Usuario) {
   return { profissionalId: usuario.profissionalId, barbeariaId: usuario.barbeariaId }
 }
 
-/** Barbeiro define a própria jornada. Horários livres futuros se ajustam ao preparar cada dia. */
-export function salvarJornada(db: Banco, usuario: Usuario, jornada: Jornada): Banco {
-  const { profissionalId } = exigirBarbeiro(usuario)
+function exigirDono(usuario: Usuario) {
+  const v = exigirBarbeiro(usuario)
+  if (!usuario.dono) throw new RegraError('Apenas o dono da barbearia pode fazer isso.')
+  return v
+}
+
+/** Quem pode mexer na agenda de um profissional: ele mesmo, ou o dono da unidade. */
+export function podeGerir(db: Banco, usuario: Usuario, profissionalId: string) {
+  if (usuario.papel !== 'Barbeiro' || !usuario.profissionalId) return false
+  if (usuario.profissionalId === profissionalId) return true
+  const p = db.profissionais.find((x) => x.id === profissionalId)
+  return ehDono(usuario) && !!p && p.barbeariaId === usuario.barbeariaId && profissionalAtivo(p)
+}
+
+function exigirGestao(db: Banco, usuario: Usuario, profissionalId: string) {
+  exigirBarbeiro(usuario)
+  if (!podeGerir(db, usuario, profissionalId)) throw new RegraError('Apenas o dono da barbearia pode gerenciar outros barbeiros.')
+}
+
+/** Jornada do próprio barbeiro, ou (dono) de alguém da equipe. Horários livres futuros se ajustam ao preparar cada dia. */
+export function salvarJornada(db: Banco, usuario: Usuario, jornada: Jornada, profissionalId?: string): Banco {
+  const alvo = profissionalId ?? exigirBarbeiro(usuario).profissionalId
+  exigirGestao(db, usuario, alvo)
   const j = validarJornada(jornada)
-  return { ...db, profissionais: db.profissionais.map((p) => (p.id === profissionalId ? { ...p, jornada: j } : p)) }
+  return { ...db, profissionais: db.profissionais.map((p) => (p.id === alvo ? { ...p, jornada: j } : p)) }
+}
+
+// ───────────── Equipe (dono da barbearia) ─────────────
+
+export type ProfissionalEditavel = Pick<Profissional, 'nome' | 'descricao' | 'especialidades'> & { id?: string; email?: string }
+
+const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
+
+/** Equipe com e-mail de acesso (convite) e se cada um já tem conta. Só o dono vê. */
+export function equipeDe(db: Banco, usuario: Usuario): MembroEquipe[] {
+  const { barbeariaId } = exigirDono(usuario)
+  return equipeAtiva(db, barbeariaId).map((p) => {
+    const email = p.emailAcesso
+    const conta = email ? db.usuarios.find((u) => u.email === email) : undefined
+    return { profissionalId: p.id, email, temConta: !!conta, dono: !!conta?.dono && conta.profissionalId === p.id }
+  })
+}
+
+/** Aplica o acesso a quem tem conta com o e-mail: vira Barbeiro da unidade, ou volta a Cliente. */
+function sincronizarAcesso(db: Banco, email: string | undefined): Banco {
+  if (!email) return db
+  const p = db.profissionais.find((x) => x.emailAcesso === email && profissionalAtivo(x))
+  return {
+    ...db,
+    usuarios: db.usuarios.map((u) => {
+      if (u.email !== email) return u
+      if (p) return { ...u, papel: 'Barbeiro', profissionalId: p.id, barbeariaId: p.barbeariaId, dono: u.profissionalId === p.id ? u.dono : false }
+      return u.papel === 'Barbeiro' ? { ...u, papel: 'Cliente', profissionalId: undefined, barbeariaId: undefined, dono: false } : u
+    }),
+  }
+}
+
+/** Dono adiciona ou edita um barbeiro. O e-mail é o convite: quem entrar com ele vira barbeiro da unidade. */
+export function salvarProfissional(db: Banco, usuario: Usuario, dados: ProfissionalEditavel): { db: Banco; profissional: Profissional } {
+  const { barbeariaId, profissionalId: eu } = exigirDono(usuario)
+  const nome = dados.nome.trim()
+  if (nome.length < 2 || nome.length > 60) throw new RegraError('Informe o nome do barbeiro (2 a 60 letras).')
+  const email = dados.email?.trim().toLowerCase() || undefined
+  if (email && !EMAIL_RE.test(email)) throw new RegraError('E-mail inválido.')
+  if (email && db.profissionais.some((p) => p.emailAcesso === email && p.id !== dados.id && profissionalAtivo(p)))
+    throw new RegraError('Este e-mail já é usado por outro barbeiro.')
+  if (email && db.usuarios.some((u) => u.email === email && u.papel === 'Barbeiro' && u.profissionalId !== dados.id))
+    throw new RegraError('Este e-mail já é de um barbeiro de outra barbearia.')
+  const campos = { nome, descricao: dados.descricao.trim().slice(0, 200), especialidades: dados.especialidades.trim().slice(0, 120) }
+
+  let atual: Profissional | undefined
+  if (dados.id) {
+    atual = db.profissionais.find((p) => p.id === dados.id && p.barbeariaId === barbeariaId && profissionalAtivo(p))
+    if (!atual) throw new RegraError('Barbeiro não encontrado.')
+  } else {
+    const a = assinaturaDe(db, barbeariaId)
+    const plano = db.planos.find((p) => p.id === a?.planoId)
+    if (plano && plano.maxProfissionais > 0 && equipeAtiva(db, barbeariaId).length >= plano.maxProfissionais)
+      throw new RegraError(`O plano ${plano.nome} permite até ${plano.maxProfissionais} barbeiros. Troque de plano para adicionar mais.`)
+  }
+  const antigo = atual?.emailAcesso
+  if (atual && atual.id === eu && antigo !== email) throw new RegraError('Seu próprio e-mail de acesso não pode ser trocado aqui.')
+  const profissional: Profissional = atual
+    ? { ...atual, ...campos, emailAcesso: email }
+    : { id: `prof-${uuid().slice(0, 8)}`, ...campos, barbeariaId, emailAcesso: email }
+  let novo: Banco = {
+    ...db,
+    profissionais: atual ? db.profissionais.map((p) => (p.id === atual!.id ? profissional : p)) : [...db.profissionais, profissional],
+  }
+  if (antigo !== email) {
+    novo = sincronizarAcesso(sincronizarAcesso(novo, antigo), email)
+    // Modo demonstração: o convidado já pode entrar com o e-mail.
+    if (email && !novo.usuarios.some((u) => u.email === email))
+      novo = { ...novo, usuarios: [...novo.usuarios, { id: `u-${uuid().slice(0, 8)}`, email, nome, papel: 'Barbeiro', profissionalId: profissional.id, barbeariaId, favoritos: [] }] }
+  }
+  return { db: novo, profissional }
+}
+
+/** Dono tira um barbeiro da equipe. Sai do catálogo e perde o acesso; o histórico fica. */
+export function removerProfissional(db: Banco, usuario: Usuario, profissionalId: string): Banco {
+  const { barbeariaId, profissionalId: eu } = exigirDono(usuario)
+  const p = db.profissionais.find((x) => x.id === profissionalId && x.barbeariaId === barbeariaId && profissionalAtivo(x))
+  if (!p) throw new RegraError('Barbeiro não encontrado.')
+  if (p.id === eu) throw new RegraError('Você não pode remover a si mesmo.')
+  if (db.agendamentos.some((a) => a.profissionalId === p.id && a.status === 'Confirmado'))
+    throw new RegraError('Este barbeiro tem reservas confirmadas ou pendentes de finalizar. Resolva-as antes de remover.')
+  const usado = (h: Horario) => db.agendamentos.some((a) => a.horarioId === h.id)
+  const livreFuturo = (h: Horario) => h.profissionalId === p.id && h.status === 'Livre' && ehFuturo(h.inicio)
+  const novo: Banco = {
+    ...db,
+    profissionais: db.profissionais.map((x) => (x.id === p.id ? { ...x, ativo: false, emailAcesso: undefined } : x)),
+    horarios: db.horarios.filter((h) => !livreFuturo(h) || usado(h)).map((h) => (livreFuturo(h) ? { ...h, status: 'Bloqueado' as const } : h)),
+  }
+  return sincronizarAcesso(novo, p.emailAcesso)
 }
 
 export type ServicoEditavel = Pick<Servico, 'nome' | 'descricao' | 'preco' | 'duracaoMinutos' | 'categoria' | 'inclui' | 'disponivel' | 'icone'> & { id?: string }
@@ -289,9 +408,9 @@ export function validarServico(s: ServicoEditavel): ServicoEditavel {
   return { ...s, nome, descricao: s.descricao.trim().slice(0, 200), categoria: s.categoria.trim().slice(0, 40), inclui: s.inclui.trim().slice(0, 120) }
 }
 
-/** Barbeiro cria ou edita um serviço da própria unidade. */
+/** Dono cria ou edita um serviço da própria unidade. */
 export function salvarServico(db: Banco, usuario: Usuario, servico: ServicoEditavel): { db: Banco; servico: Servico } {
-  const { barbeariaId } = exigirBarbeiro(usuario)
+  const { barbeariaId } = exigirDono(usuario)
   const v = validarServico(servico)
   if (v.id) {
     const atual = db.servicos.find((s) => s.id === v.id)
@@ -313,9 +432,9 @@ export function normalizarTelefone(t: string | undefined) {
   return d
 }
 
-/** Barbeiro atualiza descrição e contato da unidade vinculada. */
+/** Dono atualiza descrição e contato da unidade. */
 export function atualizarBarbearia(db: Banco, usuario: Usuario, dados: DadosBarbearia): Banco {
-  const { barbeariaId } = exigirBarbeiro(usuario)
+  const { barbeariaId } = exigirDono(usuario)
   const patch = {
     descricao: dados.descricao.trim().slice(0, 400),
     telefone: normalizarTelefone(dados.telefone),
@@ -453,10 +572,10 @@ function comVisibilidade(db: Banco, a: Assinatura): Banco {
 
 /** RF15/RF16: escolher, trocar ou renovar o plano. No teste só troca; fora dele fica Pendente até o pagamento. */
 export function escolherPlano(db: Banco, usuario: Usuario, planoId: string): { db: Banco; assinatura: Assinatura } {
-  const { barbeariaId } = exigirBarbeiro(usuario)
+  const { barbeariaId } = exigirDono(usuario)
   const plano = db.planos.find((p) => p.id === planoId)
   if (!plano) throw new RegraError('Plano não encontrado.')
-  const equipe = db.profissionais.filter((p) => p.barbeariaId === barbeariaId).length
+  const equipe = equipeAtiva(db, barbeariaId).length
   if (plano.maxProfissionais > 0 && equipe > plano.maxProfissionais)
     throw new RegraError(`Sua equipe tem ${equipe} barbeiros; o plano ${plano.nome} permite até ${plano.maxProfissionais}.`)
   const ts = iso(agora())
@@ -469,7 +588,7 @@ export function escolherPlano(db: Banco, usuario: Usuario, planoId: string): { d
 
 /** RF16: cancelar. A unidade continua visível até o fim do período já pago (ou do teste). */
 export function cancelarAssinatura(db: Banco, usuario: Usuario): Banco {
-  const { barbeariaId } = exigirBarbeiro(usuario)
+  const { barbeariaId } = exigirDono(usuario)
   const a = assinaturaDe(db, barbeariaId)
   if (!a || a.status === 'Cancelada') throw new RegraError('Não há assinatura para cancelar.')
   return comVisibilidade(db, { ...a, status: 'Cancelada', atualizadoEm: iso(agora()) })
@@ -477,7 +596,7 @@ export function cancelarAssinatura(db: Banco, usuario: Usuario): Banco {
 
 /** RF17: aderir à parceria. Exige assinatura em dia e nenhuma parceria aberta. A equipe aprova depois. */
 export function solicitarParceria(db: Banco, usuario: Usuario, descontoPct: number, dias: number): { db: Banco; parceria: Parceria } {
-  const { barbeariaId } = exigirBarbeiro(usuario)
+  const { barbeariaId } = exigirDono(usuario)
   if (!DESCONTOS_PARCERIA.includes(descontoPct)) throw new RegraError('Escolha um desconto entre 10% e 30%.')
   if (!PERIODOS_PARCERIA.includes(dias)) throw new RegraError('Escolha 30 ou 90 dias.')
   const a = assinaturaDe(db, barbeariaId)
@@ -489,7 +608,7 @@ export function solicitarParceria(db: Banco, usuario: Usuario, descontoPct: numb
 
 /** Cancela o pedido em análise ou encerra a parceria em vigor (o destaque e o desconto acabam na hora). */
 export function encerrarParceria(db: Banco, usuario: Usuario, parceriaId: string): Banco {
-  const { barbeariaId } = exigirBarbeiro(usuario)
+  const { barbeariaId } = exigirDono(usuario)
   const p = db.parcerias.find((x) => x.id === parceriaId && x.barbeariaId === barbeariaId && (x.status === 'Solicitada' || x.status === 'Ativa'))
   if (!p) throw new RegraError('Parceria não encontrada.')
   const fim = p.status === 'Ativa' && p.fim && depoisDeAgora(p.fim) ? iso(agora()) : p.fim

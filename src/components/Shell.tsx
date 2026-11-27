@@ -89,7 +89,7 @@ function Drawer({ onClose }: { onClose: () => void }) {
         <nav className="mt-2 flex-1 space-y-0.5">
           {usuario?.papel === 'Barbeiro' && (
             <Item to="/barbeiro" icon={<IScissors />}>
-              Área do barbeiro
+              {usuario.dono ? 'Área do dono' : 'Área do barbeiro'}
             </Item>
           )}
           <Item to="/ajuda" icon={<IHelp />}>

@@ -37,3 +37,8 @@
 - **Assinatura mensal:** planos com limite de barbeiros, 30 dias de teste grátis, página "Plano e parceria" na Área do barbeiro com situação, troca, renovação e cancelamento. Barbearia com assinatura vencida sai da busca e do mapa e não recebe reservas novas.
 - **Parcerias em vez de patrocínio:** como a busca é por localização, não há anúncio no topo. A parceira oferece de 10% a 30% de desconto pelo app e ganha a seção "Parceiras BarberHUB" no Início, selo "Parceira", pino dourado no mapa e preço riscado nos serviços. A reserva já grava o preço com desconto.
 - **Sem gateway de pagamento:** cobrança enviada pela equipe e confirmada no SQL Editor.
+
+## Dono da barbearia (27/11/2026)
+
+- **Conta de barbeiro restrita à própria barbearia:** o Início, o mapa e os favoritos mostram só a unidade dela, e o servidor recusa reservas em outras.
+- **Dono:** nova tela **Equipe** para adicionar, editar e remover barbeiros e convidá-los pelo e-mail; agenda e horários de qualquer barbeiro; reservas de toda a unidade. Serviços, dados da unidade, plano e parceria passam a ser só do dono. A conta de teste do Nicolas é a dona da Procópio.

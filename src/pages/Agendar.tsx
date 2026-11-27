@@ -4,7 +4,7 @@ import { useApp, useUsuario } from '../state/AppContext'
 import { Button, Empty, Field, Note, Page, PrecoApp, Sheet, TopBar, cx } from '../components/ui'
 import { ICalendar, IClock, IRepeat, IconeServico } from '../components/Icons'
 import { NaoEncontrado } from './Barbearia'
-import { horariosLivres, jornadaDe, precoNoApp, resumoJornada, servicoCabe } from '../domain/rules'
+import { barbeariaPermitida, horariosLivres, jornadaDe, profissionalAtivo, precoNoApp, resumoJornada, servicoCabe } from '../domain/rules'
 import { brlFull, dataHoraLonga, diaLocal, hora, somarMinutos } from '../lib/format'
 import type { Agendamento, Servico } from '../domain/types'
 
@@ -91,7 +91,7 @@ export function Profissional() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [p?.id, dia, p?.jornada])
 
-  if (!p) return <NaoEncontrado />
+  if (!p || !profissionalAtivo(p) || !barbeariaPermitida(u, p.barbeariaId)) return <NaoEncontrado />
 
   const escolherDia = (d: string) => {
     setDia(d)
@@ -186,13 +186,14 @@ export function Profissional() {
 export function Agendar() {
   const { horarioId } = useParams()
   const { db, confirmar, remarcar } = useApp()
+  const u = useUsuario()
   const nav = useNavigate()
   const fluxo = useFluxo()
   const [aberto, setAberto] = useState(false)
   const [servicoId, setServicoId] = useState<string | null>(fluxo.servico?.id ?? null)
   const [enviando, setEnviando] = useState(false)
   const h = db.horarios.find((x) => x.id === horarioId)
-  if (!h) return <NaoEncontrado />
+  if (!h || !barbeariaPermitida(u, h.barbeariaId)) return <NaoEncontrado />
   const b = db.barbearias.find((x) => x.id === h.barbeariaId)
   const p = db.profissionais.find((x) => x.id === h.profissionalId)
   const servicos = db.servicos.filter((s) => s.barbeariaId === h.barbeariaId && s.disponivel && servicoCabe(s, h))

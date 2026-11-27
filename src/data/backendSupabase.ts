@@ -1,5 +1,5 @@
 import { createClient, type RealtimePostgresChangesPayload, type SupabaseClient } from '@supabase/supabase-js'
-import type { Agendamento, Assinatura, Avaliacao, Banco, Barbearia, Horario, Parceria, Plano, Profissional, Servico, Usuario } from '../domain/types'
+import type { Agendamento, Assinatura, Avaliacao, Banco, Barbearia, Horario, MembroEquipe, Parceria, Plano, Profissional, Servico, Usuario } from '../domain/types'
 import type { Backend, Estado } from './backend'
 import { uuid } from '../lib/id'
 
@@ -25,7 +25,7 @@ const aParceria = (r: Row): Parceria => ({
 })
 const aProfissional = (r: Row): Profissional => ({
   id: r.id, nome: r.nome, descricao: r.descricao, especialidades: r.especialidades, barbeariaId: r.barbearia_id,
-  foto: r.foto ?? undefined, jornada: r.jornada ?? undefined,
+  foto: r.foto ?? undefined, jornada: r.jornada ?? undefined, ativo: r.ativo ?? true,
 })
 const aServico = (r: Row): Servico => ({
   id: r.id, barbeariaId: r.barbearia_id, nome: r.nome, descricao: r.descricao, preco: Number(r.preco),
@@ -46,7 +46,7 @@ const aAvaliacao = (r: Row): Avaliacao => ({
 })
 const aUsuario = (r: Row): Usuario => ({
   id: r.id, email: r.email, nome: r.nome, foto: r.foto ?? undefined, papel: r.papel,
-  profissionalId: r.profissional_id ?? undefined, barbeariaId: r.barbearia_id ?? undefined,
+  profissionalId: r.profissional_id ?? undefined, barbeariaId: r.barbearia_id ?? undefined, dono: !!r.dono,
   localizacao: r.localizacao ?? undefined, raioBuscaKm: r.raio_busca_km ?? undefined,
   favoritos: r.favoritos ?? [], dataBusca: r.data_busca ?? {},
 })
@@ -61,7 +61,7 @@ const deUsuario = (p: Partial<Usuario>): Row => {
   return r
 }
 
-const vazio = (): Banco => ({ versao: 3, usuarios: [], barbearias: [], profissionais: [], servicos: [], horarios: [], agendamentos: [], avaliacoes: [], planos: [], assinaturas: [], parcerias: [] })
+const vazio = (): Banco => ({ versao: 4, usuarios: [], barbearias: [], profissionais: [], servicos: [], horarios: [], agendamentos: [], avaliacoes: [], planos: [], assinaturas: [], parcerias: [] })
 
 const SEM_CONEXAO = 'Sem conexão com o servidor. Verifique sua internet.'
 function erro(e: { message?: string } | null): never {
@@ -132,7 +132,7 @@ export function criarBackendSupabase(url: string, chave: string): Backend {
     const f = [b, p, sv, h, a, av, me, pl, as, pc].find((x) => x.error)
     if (f?.error) erro(f.error)
     db = {
-      versao: 3,
+      versao: 4,
       // Ordena o catálogo como no modo local (Procópio primeiro).
       barbearias: (b.data ?? []).map(aBarbearia).sort((x, y) => x.id.localeCompare(y.id)),
       profissionais: (p.data ?? []).map(aProfissional),
@@ -301,11 +301,29 @@ export function criarBackendSupabase(url: string, chave: string): Backend {
       if (error) erro(error)
       await buscar('horarios', 'id', [id])
     },
-    async salvarJornada(j) {
-      const { error } = await sb.rpc('salvar_jornada', { p_jornada: j })
+    async salvarJornada(j, prof) {
+      const { error } = await sb.rpc('salvar_jornada', { p_jornada: j, p_profissional: prof ?? null })
       if (error) erro(error)
-      const p = eu()?.profissionalId
+      const p = prof ?? eu()?.profissionalId
       if (p) await buscar('profissionais', 'id', [p])
+    },
+    async equipe() {
+      const { data, error } = await sb.rpc('minha_equipe')
+      if (error) erro(error)
+      return ((data ?? []) as Row[]).map(
+        (r): MembroEquipe => ({ profissionalId: r.profissional_id, email: r.email ?? undefined, temConta: !!r.tem_conta, dono: !!r.dono }),
+      )
+    },
+    async salvarProfissional(p) {
+      const { data, error } = await sb.rpc('salvar_profissional', { p_profissional: p })
+      if (error) erro(error)
+      aplicar('profissionais', [data as Row])
+      return aProfissional(data as Row)
+    },
+    async removerProfissional(id) {
+      const { error } = await sb.rpc('remover_profissional', { p_id: id })
+      if (error) erro(error)
+      await buscar('profissionais', 'id', [id])
     },
     async salvarServico(s) {
       const { data, error } = await sb.rpc('salvar_servico', { p_servico: s })
@@ -357,7 +375,7 @@ export function criarBackendSupabase(url: string, chave: string): Backend {
       const u = eu()
       if (!u) erro({ message: 'Entre na sua conta para continuar.' })
       const dono = pasta === 'perfis' ? u.id : u.barbeariaId
-      if (!dono) erro({ message: 'Apenas o barbeiro vinculado pode alterar a foto.' })
+      if (!dono || (pasta === 'barbearias' && !u.dono)) erro({ message: 'Apenas o dono da barbearia pode alterar a foto.' })
       const blob = await (await fetch(dataUrl)).blob()
       const caminho = `${pasta}/${dono}/${uuid()}.jpg`
       const { error } = await sb.storage.from('fotos').upload(caminho, blob, { contentType: 'image/jpeg', cacheControl: '31536000', upsert: false })

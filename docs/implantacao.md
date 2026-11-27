@@ -29,7 +29,9 @@ O que cada tabela e função faz está em [banco-de-dados.md](banco-de-dados.md)
 
 ### Dar acesso de barbeiro
 
-O papel `Barbeiro` vem da tabela `acessos_profissionais`, uma lista de e-mails ligados a um profissional. Ela não é lida pela API pública; edite pelo painel do Supabase (Table Editor ou SQL Editor).
+**Pelo app (recomendado):** o dono da barbearia abre **Área do dono > Equipe**, adiciona o barbeiro (ou edita um existente) e preenche o **e-mail de acesso**. Quem entrar com esse e-mail vira barbeiro da unidade; se a pessoa já tinha conta de cliente, ela é promovida na hora. Apagar o e-mail ou remover o barbeiro tira o acesso.
+
+**Pelo painel**, para casos fora do app (por exemplo, o primeiro dono de uma unidade nova): o papel `Barbeiro` vem da tabela `acessos_profissionais`, uma lista de e-mails ligados a um profissional. Ela não é lida pela API pública; edite pelo painel do Supabase (Table Editor ou SQL Editor).
 
 **Antes do primeiro login** da pessoa, cadastre o e-mail (sempre em minúsculas):
 
@@ -49,6 +51,15 @@ set papel = 'Barbeiro', profissional_id = pr.id, barbearia_id = pr.barbearia_id
 from profissionais pr
 where pr.id = 'prof-001' and lower(p.email) = 'email-do-barbeiro@exemplo.com';
 ```
+
+Para tornar alguém **dono** da unidade (gerencia equipe, serviços, dados, plano e parceria):
+
+```sql
+update acessos_profissionais set dono = true where email = 'email-do-dono@exemplo.com';
+select sincronizar_acesso('email-do-dono@exemplo.com');
+```
+
+A conta de teste `nicolasduarte.s+barbeiro@gmail.com` é a dona da Procópio (Manauara Shopping).
 
 Dica para testes: use um alias do mesmo e-mail (por exemplo `seunome+barbeiro@gmail.com`) para ter uma conta de barbeiro sem perder a de cliente.
 

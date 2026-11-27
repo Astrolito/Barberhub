@@ -11,8 +11,10 @@ export interface Usuario {
   papel: Papel
   /** Vínculo opcional: profissional da conta autorizada. */
   profissionalId?: string
-  /** Vínculo opcional: unidade que o profissional pode atualizar. */
+  /** Vínculo opcional: unidade do profissional. */
   barbeariaId?: string
+  /** Dono da unidade: gerencia equipe, serviços, dados da unidade, plano e parceria. */
+  dono?: boolean
   /** Ponto de busca salvo (GPS ou endereço). */
   localizacao?: PontoBusca
   /** Preferência individual de raio. 0 = sem limite. Vazio = 5 km. */
@@ -60,6 +62,16 @@ export interface Profissional {
   foto?: string
   /** Dias e horários em que atende. Vazio = jornada padrão. */
   jornada?: Jornada
+  /** false = removido da equipe pelo dono (sai do catálogo; o histórico fica). */
+  ativo?: boolean
+}
+
+/** Barbeiro da equipe visto pelo dono: e-mail de acesso (convite) e se já entrou no app. */
+export interface MembroEquipe {
+  profissionalId: string
+  email?: string
+  temConta: boolean
+  dono: boolean
 }
 
 /** Agenda configurável do profissional. */

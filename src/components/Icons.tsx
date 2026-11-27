@@ -64,3 +64,4 @@ export function IconeServico({ tipo, size = 28 }: { tipo: 'corte' | 'barba' | 'c
   if (tipo === 'combo') return (<svg {...s}>{hair}{face}{eyes}{beard}</svg>)
   return (<svg {...s}><rect x="11" y="9" width="10" height="15" rx="3" stroke="#fff" strokeWidth="2.2" fill="none" /><path d="M12 5v4M14 5v4M16 5v4M18 5v4M20 5v4" stroke="#fff" strokeWidth="1.6" strokeLinecap="round" /><path d="M14 14h4M14 17h4" stroke="#3b82f6" strokeWidth="2" strokeLinecap="round" /><path d="M16 24v4" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" /></svg>)
 }
+export const IUsers = (p: P) => (<svg {...base(p)}><circle cx="9" cy="8" r="3.5" /><path d="M2.5 20c1-3.4 3.6-5.2 6.5-5.2s5.5 1.8 6.5 5.2" /><path d="M16 4.8a3.5 3.5 0 0 1 0 6.4M18 14.9c1.7.7 2.9 2.4 3.5 5.1" /></svg>)

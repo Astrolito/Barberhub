@@ -3,8 +3,8 @@
 // - supabase: Postgres com RLS, login por e-mail e regras em funções SQL atômicas
 // O modo é escolhido pelas variáveis VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY.
 
-import type { Agendamento, Assinatura, Banco, Jornada, Parceria, Servico, Usuario } from '../domain/types'
-import type { DadosBarbearia, ServicoEditavel } from '../domain/rules'
+import type { Agendamento, Assinatura, Banco, Jornada, MembroEquipe, Parceria, Profissional, Servico, Usuario } from '../domain/types'
+import type { DadosBarbearia, ProfissionalEditavel, ServicoEditavel } from '../domain/rules'
 
 export type Estado = {
   db: Banco
@@ -31,7 +31,12 @@ export interface Backend {
   cancelar(agendamentoId: string): Promise<void>
   encerrar(agendamentoId: string, resultado: 'Finalizado' | 'Não compareceu'): Promise<void>
   alternarBloqueio(horarioId: string): Promise<void>
-  salvarJornada(jornada: Jornada): Promise<void>
+  /** Sem profissionalId: a própria agenda. Com: só o dono, para alguém da equipe. */
+  salvarJornada(jornada: Jornada, profissionalId?: string): Promise<void>
+  /** Equipe da unidade com e-mails de acesso (só o dono). */
+  equipe(): Promise<MembroEquipe[]>
+  salvarProfissional(p: ProfissionalEditavel): Promise<Profissional>
+  removerProfissional(profissionalId: string): Promise<void>
   salvarServico(servico: ServicoEditavel): Promise<Servico>
   atualizarBarbearia(dados: DadosBarbearia): Promise<void>
   avaliar(agendamentoId: string, nota: number, comentario: string): Promise<void>

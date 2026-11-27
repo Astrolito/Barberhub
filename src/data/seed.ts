@@ -69,7 +69,7 @@ export function receitaInicial(ids: string[], agora = Date.now()) {
 
 function criarCatalogo(): Banco {
   return {
-    versao: 3,
+    versao: 4,
     usuarios: [
       {
         id: 'u-cliente',
@@ -85,6 +85,8 @@ function criarCatalogo(): Banco {
         papel: 'Barbeiro',
         profissionalId: 'prof-001',
         barbeariaId: 'bb001',
+        // Dono da Procópio na demonstração: gerencia a equipe, os serviços e o plano.
+        dono: true,
         favoritos: [],
       },
     ],

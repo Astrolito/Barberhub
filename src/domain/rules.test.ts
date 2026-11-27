@@ -306,3 +306,73 @@ describe('assinatura e parceria', () => {
     expect(() => R.solicitarParceria(db, barbeiro, 50, 30)).toThrow(/entre 10% e 30%/)
   })
 })
+
+describe('dono da barbearia', () => {
+  const comum = () => {
+    // Yan vira barbeiro comum da Procópio (sem ser dono).
+    const r = R.salvarProfissional(db, barbeiro, { id: 'prof-002', nome: 'Yan Félix', descricao: '', especialidades: '', email: 'yan@teste.app' })
+    db = r.db
+    return db.usuarios.find((u) => u.email === 'yan@teste.app')!
+  }
+
+  it('convida um barbeiro pelo e-mail e ele entra vinculado à unidade, sem ser dono', () => {
+    const yan = comum()
+    expect(yan).toMatchObject({ papel: 'Barbeiro', profissionalId: 'prof-002', barbeariaId: 'bb001' })
+    expect(R.ehDono(yan)).toBe(false)
+    expect(R.equipeDe(db, barbeiro).find((m) => m.profissionalId === 'prof-002')).toMatchObject({ email: 'yan@teste.app', temConta: true, dono: false })
+  })
+
+  it('barbeiro comum não mexe em serviços, unidade, plano nem na agenda dos outros', () => {
+    const yan = comum()
+    expect(() => R.salvarServico(db, yan, { nome: 'Novo', descricao: '', preco: 10, duracaoMinutos: 30, categoria: '', inclui: '', disponivel: true, icone: 'corte' })).toThrow(/dono/)
+    expect(() => R.atualizarBarbearia(db, yan, { descricao: 'x' })).toThrow(/dono/)
+    expect(() => R.escolherPlano(db, yan, 'premium')).toThrow(/dono/)
+    expect(() => R.salvarJornada(db, yan, R.JORNADA_PADRAO, 'prof-001')).toThrow(/dono/)
+    expect(() => R.salvarProfissional(db, yan, { nome: 'Outro', descricao: '', especialidades: '' })).toThrow(/dono/)
+    // A própria agenda continua sendo dele.
+    expect(() => (db = R.salvarJornada(db, yan, { ...R.JORNADA_PADRAO, intervaloMin: 60 }))).not.toThrow()
+  })
+
+  it('dono ajusta a agenda e os horários de outro barbeiro', () => {
+    db = R.salvarJornada(db, barbeiro, { dias: [1], inicio: '09:00', fim: '11:00', intervaloMin: 60 }, 'prof-003')
+    preparar(DIA, 'prof-003')
+    const h = livre('09:00', DIA, 'prof-003')
+    db = R.alternarBloqueio(db, h, barbeiro)
+    expect(db.horarios.find((x) => x.id === h)?.status).toBe('Bloqueado')
+  })
+
+  it('respeita o limite de barbeiros do plano', () => {
+    // Procópio está no Profissional (até 5) com 4 barbeiros.
+    db = R.salvarProfissional(db, barbeiro, { nome: 'Quinto', descricao: '', especialidades: '' }).db
+    expect(() => R.salvarProfissional(db, barbeiro, { nome: 'Sexto', descricao: '', especialidades: '' })).toThrow(/permite até 5/)
+  })
+
+  it('remove um barbeiro: sai do catálogo, perde o acesso e não recebe reservas', () => {
+    const yan = comum()
+    preparar(DIA, 'prof-002')
+    db = R.removerProfissional(db, barbeiro, 'prof-002')
+    expect(R.equipeAtiva(db, 'bb001').map((p) => p.id)).not.toContain('prof-002')
+    expect(db.usuarios.find((u) => u.id === yan.id)).toMatchObject({ papel: 'Cliente', profissionalId: undefined })
+    expect(db.horarios.some((h) => h.profissionalId === 'prof-002' && h.status === 'Livre')).toBe(false)
+    expect(() => preparar(DIA, 'prof-002')).toThrow(/não encontrado/)
+    expect(() => R.removerProfissional(db, barbeiro, 'prof-001')).toThrow(/si mesmo/)
+  })
+
+  it('não remove quem tem reserva confirmada', () => {
+    preparar(DIA, 'prof-002')
+    reservar(livre('10:00', DIA, 'prof-002'))
+    expect(() => R.removerProfissional(db, barbeiro, 'prof-002')).toThrow(/reservas confirmadas/)
+  })
+
+  it('conta de barbeiro só reserva na própria barbearia', () => {
+    db = R.salvarJornada(db, barbeiro, R.JORNADA_PADRAO)
+    const outra = db.profissionais.find((p) => p.barbeariaId !== 'bb001')
+    expect(R.barbeariaPermitida(barbeiro, 'bb001')).toBe(true)
+    expect(R.barbeariaPermitida(barbeiro, 'bb002')).toBe(false)
+    expect(R.barbeariaPermitida(cliente, 'bb002')).toBe(true)
+    if (outra) {
+      preparar(DIA, outra.id)
+      expect(() => reservar(livre('10:00', DIA, outra.id), barbeiro)).toThrow(/própria barbearia/)
+    }
+  })
+})

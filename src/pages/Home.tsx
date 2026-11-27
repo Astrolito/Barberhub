@@ -6,7 +6,7 @@ import { useApp, useUsuario } from '../state/AppContext'
 import { Button, Capa, Note, SeloParceira, Sheet, Switch, cx } from '../components/ui'
 import { ICalendar, IChevron, ILocate, ILocateOff, IPin, ISearch, IStar, IX } from '../components/Icons'
 import { OPCOES_DISTANCIA } from '../data/seed'
-import { barbeariaVisivel, notaDaBarbearia, parceriaVigente, raioAplicado } from '../domain/rules'
+import { barbeariaPermitida, barbeariaVisivel, notaDaBarbearia, parceriaVigente, raioAplicado } from '../domain/rules'
 import { BAIRROS, capturarGps, distanciaKm, geocodificarEndereco, gpsIndisponivel, pontoDoBairro } from '../lib/geo'
 import { km } from '../lib/format'
 import type { Barbearia, Parceria } from '../domain/types'
@@ -88,11 +88,12 @@ export default function Home() {
   // Barbearias com assinatura em dia (RN08), dentro do raio, da mais próxima para a mais distante.
   const noRaio = useMemo<Item[]>(() => {
     let itens: Item[] = db.barbearias
-      .filter((b) => b.cidade === 'Manaus' && barbeariaVisivel(b))
+      // Conta de barbeiro só enxerga a própria barbearia.
+      .filter((b) => b.cidade === 'Manaus' && barbeariaVisivel(b) && barbeariaPermitida(u, b.id))
       .map((b) => ({ b, dist: ref ? distanciaKm(ref, b) : undefined, parceria: parceriaVigente(db, b.id) }))
     if (ref) itens = itens.filter((x) => raio === 0 || (x.dist ?? 0) <= raio).sort((a, b) => (a.dist ?? 0) - (b.dist ?? 0))
     return itens
-  }, [db, ref, raio])
+  }, [db, ref, raio, u])
 
   // A pesquisa filtra a lista e os pinos do mapa.
   const q = normalizar(busca.trim())

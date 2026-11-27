@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import type { Agendamento, Banco, Jornada, Servico, Usuario } from '../domain/types'
-import type { DadosBarbearia, ServicoEditavel } from '../domain/rules'
+import type { Agendamento, Banco, Jornada, MembroEquipe, Profissional, Servico, Usuario } from '../domain/types'
+import type { DadosBarbearia, ProfissionalEditavel, ServicoEditavel } from '../domain/rules'
 import type { Backend, Estado } from '../data/backend'
 import { criarBackendLocal } from '../data/backendLocal'
 import { criarBackendSupabase } from '../data/backendSupabase'
@@ -28,7 +28,11 @@ interface Ctx {
   cancelar(agendamentoId: string): Promise<boolean>
   encerrar(agendamentoId: string, resultado: 'Finalizado' | 'Não compareceu'): Promise<boolean>
   alternarBloqueio(horarioId: string): Promise<void>
-  salvarJornada(jornada: Jornada): Promise<boolean>
+  salvarJornada(jornada: Jornada, profissionalId?: string): Promise<boolean>
+  /** Só o dono. null quando falhou (o erro vira toast). */
+  equipe(): Promise<MembroEquipe[] | null>
+  salvarProfissional(p: ProfissionalEditavel): Promise<Profissional | null>
+  removerProfissional(profissionalId: string): Promise<boolean>
   salvarServico(servico: ServicoEditavel): Promise<Servico | null>
   atualizarBarbearia(dados: DadosBarbearia): Promise<boolean>
   avaliar(agendamentoId: string, nota: number, comentario: string): Promise<boolean>
@@ -50,7 +54,7 @@ const URL_SB = import.meta.env.VITE_SUPABASE_URL as string | undefined
 const CHAVE_SB = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
 const backend: Backend = URL_SB && CHAVE_SB ? criarBackendSupabase(URL_SB, CHAVE_SB) : criarBackendLocal()
 
-const vazio: Banco = { versao: 3, usuarios: [], barbearias: [], profissionais: [], servicos: [], horarios: [], agendamentos: [], avaliacoes: [], planos: [], assinaturas: [], parcerias: [] }
+const vazio: Banco = { versao: 4, usuarios: [], barbearias: [], profissionais: [], servicos: [], horarios: [], agendamentos: [], avaliacoes: [], planos: [], assinaturas: [], parcerias: [] }
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [estado, setEstado] = useState<Estado>({ db: vazio, email: null, pronto: false })
@@ -131,7 +135,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     alternarBloqueio: async (id) => {
       await tentar(() => backend.alternarBloqueio(id))
     },
-    salvarJornada: (j) => ok(tentar(() => backend.salvarJornada(j).then(() => true), 'Agenda salva. Os novos horários já aparecem para os clientes.')),
+    salvarJornada: (j, p) => ok(tentar(() => backend.salvarJornada(j, p).then(() => true), 'Agenda salva. Os novos horários já aparecem para os clientes.')),
+    equipe: () => tentar(() => backend.equipe()),
+    salvarProfissional: (p) =>
+      tentar(() => backend.salvarProfissional(p), p.id ? 'Barbeiro atualizado.' : p.email ? 'Barbeiro adicionado. Ele entra no app com o e-mail convidado.' : 'Barbeiro adicionado.'),
+    removerProfissional: (id) => ok(tentar(() => backend.removerProfissional(id).then(() => true), 'Barbeiro removido da equipe.', 'info')),
     salvarServico: (s) => tentar(() => backend.salvarServico(s), s.id ? 'Serviço atualizado.' : 'Serviço criado.'),
     atualizarBarbearia: (d) => ok(tentar(() => backend.atualizarBarbearia(d).then(() => true), 'Dados da unidade salvos.')),
     avaliar: (id, n, c) => ok(tentar(() => backend.avaliar(id, n, c).then(() => true), 'Obrigado pela avaliação!')),

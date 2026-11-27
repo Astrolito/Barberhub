@@ -21,7 +21,7 @@ export class RepositorioLocal implements Repositorio {
       const raw = localStorage.getItem(CHAVE)
       if (raw) {
         let db = JSON.parse(raw) as Banco
-        if (db.versao === 3) return (this.memoria = db)
+        if (db.versao === 4) return (this.memoria = db)
         // v1 → v2: avaliações, nome do cliente na reserva, sem tentativas "Indisponível".
         if (db.versao === 1) {
           const nomes = new Map(db.usuarios.map((u) => [u.email, u.nome]))
@@ -40,8 +40,13 @@ export class RepositorioLocal implements Repositorio {
           const receita = receitaInicial(db.barbearias.map((b) => b.id))
           const ate = new Map(receita.assinaturas.map((a) => [a.barbeariaId, a.validaAte]))
           const v3: Banco = { ...db, ...receita, versao: 3, barbearias: db.barbearias.map((b) => ({ ...b, visivelAte: ate.get(b.id) })) }
-          this.salvar(v3)
-          return (this.memoria = v3)
+          db = v3
+        }
+        // v3 → v4: dono da barbearia (a conta de barbeiro da demonstração é a dona da Procópio).
+        if (db.versao === 3) {
+          const v4: Banco = { ...db, versao: 4, usuarios: db.usuarios.map((u) => (u.profissionalId === 'prof-001' ? { ...u, dono: true } : u)) }
+          this.salvar(v4)
+          return (this.memoria = v4)
         }
       }
     } catch {
