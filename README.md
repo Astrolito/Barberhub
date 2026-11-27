@@ -15,7 +15,7 @@ Equipe: Renatto Gabriel (PO) · Nicolas Duarte (Dev) · Sávio Santos (QA) · Ya
 - Entra sem senha, por link ou código de 6 dígitos enviado por e-mail.
 - Vê as **parceiras BarberHUB** em destaque, com preço especial pelo app.
 - Vê as barbearias ordenadas pela distância, com raio de 1, 3, 5, 10, 20 km ou sem limite (padrão 5 km).
-- **Mapa de barbearias próximas** (aba Mapa): marcadores, o ponto de busca e o círculo do raio escolhido. A localização vem do GPS, de um endereço ou do bairro.
+- **Início com mapa e pesquisa juntos:** o mapa ocupa a tela, com a pesquisa por barbearia, bairro ou endereço em cima e a lista numa gaveta embaixo. A pesquisa filtra a lista e os pinos ao mesmo tempo. Mostra o ponto de busca e o círculo do raio escolhido; a localização vem do GPS, de um endereço ou do bairro.
 - Página da unidade com serviços, preços, profissionais, avaliações, WhatsApp, telefone e horário de atendimento.
 - Agenda escolhendo serviço, profissional, data (próximos 14 dias) e horário livre.
 - Remarca ou cancela até 2h antes, adiciona ao Google Agenda ou `.ics`, recebe lembrete 1h antes (app instalado), favorita unidades, avalia atendimentos finalizados e vê o histórico.
