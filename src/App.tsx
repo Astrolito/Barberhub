@@ -1,9 +1,8 @@
-import { HashRouter, Route, Routes, useLocation } from 'react-router-dom'
+import { HashRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { useEffect } from 'react'
 import { AppProvider } from './state/AppContext'
 import { AvisoOffline, RequireAuth, TabsLayout, Toaster } from './components/Shell'
 import Home from './pages/Home'
-import Mapa from './pages/Mapa'
 import Barbearia, { NaoEncontrado, ServicoDetalhe } from './pages/Barbearia'
 import { Agendar, Profissional } from './pages/Agendar'
 import Agendamentos, { AgendamentoDetalhe, Historico } from './pages/Agendamentos'
@@ -33,7 +32,8 @@ export default function App() {
           <Route path="/entrar" element={<Entrar />} />
           <Route element={auth(<TabsLayout />)}>
             <Route index element={<Home />} />
-            <Route path="mapa" element={<Mapa />} />
+            {/* O mapa agora é o próprio Início; o endereço antigo continua funcionando. */}
+            <Route path="mapa" element={<Navigate to="/" replace />} />
             <Route path="favoritos" element={<Favoritos />} />
             <Route path="agendamentos" element={<Agendamentos />} />
             <Route path="perfil" element={<Perfil />} />

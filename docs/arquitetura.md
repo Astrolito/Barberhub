@@ -58,9 +58,9 @@ Roteamento com `HashRouter`, que funciona em hospedagem estática e dentro do we
 | Rota | Tela |
 |---|---|
 | `/entrar` | Login (e-mail com link ou código; contas de demonstração no modo local) |
-| `/` | Início: catálogo por distância e próximo agendamento |
-| `/mapa` | Mapa de barbearias próximas |
-| `/favoritos`, `/agendamentos`, `/perfil` | Abas da tab bar |
+| `/` | Início: mapa com pesquisa e lista de barbearias por distância, parceiras e próximo agendamento |
+| `/mapa` | Endereço antigo, redireciona para `/` |
+| `/favoritos`, `/agendamentos`, `/perfil` | Demais abas da tab bar (Início, Favoritos, Agendamentos, Perfil) |
 | `/barbearia/:id`, `/servico/:id`, `/profissional/:id` | Detalhes do catálogo |
 | `/agendar/:horarioId`, `/agendamento/:id` | Revisão da reserva e detalhe (remarcar, cancelar, avaliar) |
 | `/perfil/dados`, `/perfil/pagamentos`, `/perfil/historico` | Perfil |
@@ -69,14 +69,18 @@ Roteamento com `HashRouter`, que funciona em hospedagem estática e dentro do we
 
 As rotas da Área do barbeiro só mostram conteúdo para perfis com papel `Barbeiro`; o servidor também recusa as funções de barbeiro para quem não tem esse papel.
 
-## Mapa de barbearias próximas
+## Início: mapa e pesquisa
 
-`src/pages/Mapa.tsx`, com Leaflet.
+`src/pages/Home.tsx`, com Leaflet. Busca e mapa ficam numa tela só (antes eram o Início com a lista e uma aba Mapa separada).
 
+- O mapa ocupa a tela entre o cabeçalho e a tab bar. Em cima: a pesquisa (barbearia, bairro ou endereço), o botão de GPS, o chip da localização atual (abre o painel com GPS, endereço e bairro) e os chips de raio.
+- Embaixo, uma gaveta com a lista: recolhida, o mapa domina; aberta (arrastando ou tocando na alça), a lista domina. Tem o próximo agendamento, a seção "Parceiras BarberHUB" e as barbearias da mais próxima para a mais distante.
+- A pesquisa filtra a lista e os pinos ao mesmo tempo e reenquadra o mapa no resultado. Sem nenhuma barbearia com aquele nome, Enter (ou "Buscar como endereço") usa o texto como endereço.
+- Tocar num pino destaca a barbearia na lista; o botão de pino na lista centraliza o mapa nela. Parceiras têm pino dourado.
 - Tiles do OpenStreetMap (`tile.openstreetmap.org`, sem chave de API). O tema escuro vem de um filtro CSS na classe `.bh-tiles` (`src/index.css`). Os tiles do CARTO foram trocados porque passaram a exigir chave.
-- Usa o mesmo ponto de busca (`localizacao`) e raio (`raioBuscaKm`) do catálogo, então mudar um muda o outro.
-- Desenha o ponto do usuário e um círculo com o raio; mostra só as barbearias dentro dele (ou todas, com "Sem limite"), da mais próxima para a mais distante.
-- O enquadramento só muda quando o ponto de busca ou o raio mudam, não ao tocar num marcador.
+- Usa o ponto de busca (`localizacao`) e o raio (`raioBuscaKm`) salvos no perfil. Desenha o ponto do usuário e um círculo com o raio; mostra só as barbearias dentro dele (ou todas, com "Sem limite"). Sem ponto de busca, mostra o catálogo completo de Manaus.
+- Só aparecem barbearias com assinatura em dia (RN08, `barbeariaVisivel`).
+- O enquadramento muda quando o ponto de busca, o raio ou o resultado da pesquisa mudam, não ao tocar num pino.
 
 A localização vem do GPS (`@capacitor/geolocation` no app nativo, API do navegador na web), de um endereço geocodificado pelo Nominatim (`src/lib/geo.ts`) ou de um bairro de Manaus como alternativa.
 

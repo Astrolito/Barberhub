@@ -16,7 +16,7 @@ O que o sistema deve fazer. Cada RF atende a um ou mais requisitos de usuário (
 |---|---|
 | RF01 | Entrar sem senha, por link ou código de 6 dígitos enviado por e-mail |
 | RF02 | Listar barbearias pela distância, com raio de 1, 3, 5, 10, 20 km ou sem limite |
-| RF03 | Ver as barbearias próximas no mapa e definir a localização por GPS, endereço ou bairro |
+| RF03 | Ver as barbearias próximas no mapa do Início, com a pesquisa integrada (barbearia, bairro ou endereço), e definir a localização por GPS, endereço ou bairro |
 | RF04 | Ver a unidade: serviços, preços, profissionais, avaliações, WhatsApp e telefone |
 | RF05 | Agendar escolhendo serviço, profissional, data (próximos 14 dias) e horário livre |
 | RF06 | Remarcar ou cancelar a reserva, e adicioná-la ao Google Agenda ou .ics |

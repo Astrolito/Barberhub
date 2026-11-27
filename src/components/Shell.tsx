@@ -2,11 +2,10 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { Link, Navigate, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useApp } from '../state/AppContext'
 import { cx } from './ui'
-import { ICalendar, IHeart, IHelp, IHome, IInfo, ILogout, IMap, IMenu, IScissors, IUser, IWifiOff, IX } from './Icons'
+import { ICalendar, IHeart, IHelp, IHome, IInfo, ILogout, IMenu, IScissors, IUser, IWifiOff, IX } from './Icons'
 
 const TABS = [
   { to: '/', label: 'Início', icon: IHome, end: true },
-  { to: '/mapa', label: 'Mapa', icon: IMap },
   { to: '/favoritos', label: 'Favoritos', icon: IHeart },
   { to: '/agendamentos', label: 'Agendamentos', icon: ICalendar },
   { to: '/perfil', label: 'Perfil', icon: IUser },
@@ -15,7 +14,7 @@ const TABS = [
 export function TabBar() {
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-line/70 bg-bg/90 pb-safe backdrop-blur-xl">
-      <div className="mx-auto grid h-16 max-w-[520px] grid-cols-5">
+      <div className="mx-auto grid h-16 max-w-[520px] grid-cols-4">
         {TABS.map(({ to, label, icon: Icon, end }) => (
           <NavLink
             key={to}
