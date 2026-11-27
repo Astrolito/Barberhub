@@ -199,15 +199,30 @@ export function Campo({ label, dica, children }: { label: string; dica?: string;
 export const inputCls =
   'h-12 w-full rounded-xl border border-line bg-surface2 px-3.5 text-[16px] [color-scheme:dark] placeholder:text-faint focus:border-brand focus:outline-none'
 
-/** Capa da barbearia: foto enviada ou identidade de espera. */
+/**
+ * Capa da barbearia: foto enviada ou identidade de espera.
+ * A sigla e o rótulo escalam com a largura da capa (unidades cqw), para caber inteiros
+ * tanto nas miniaturas da lista quanto no topo da página da unidade.
+ */
 export function Capa({ b, className, big }: { b: Barbearia; className?: string; big?: boolean }) {
   if (b.fotoCapa) return <img src={b.fotoCapa} alt={b.nome} className={cx('h-full w-full object-cover', className)} />
   const f = b.marca.fonte === 'serif' ? 'font-serif' : b.marca.fonte === 'script' ? 'font-serif italic' : 'font-sans'
+  // Largura média de um caractere em em, conforme a fonte; maiúsculas ocupam mais.
+  const sigla = b.marca.sigla
+  const larg = [...sigla].reduce((t, c) => t + (c === c.toUpperCase() && /\p{L}/u.test(c) ? 0.72 : 0.56), 0) || 1
+  const max = big ? 44 : 26
   return (
-    <div className={cx('grid h-full w-full place-items-center', className)} style={{ background: b.marca.fundo }}>
-      <div className="px-3 text-center" style={{ color: b.marca.cor }}>
-        <div className={cx(f, 'font-black leading-none tracking-tight', big ? 'text-[44px]' : 'text-[26px]')}>{b.marca.sigla}</div>
-        <div className={cx('mt-1.5 font-semibold uppercase tracking-[0.3em] opacity-80', big ? 'text-[12px]' : 'text-[8.5px]')}>Barbearia</div>
+    <div className={cx('grid h-full w-full place-items-center overflow-hidden', className)} style={{ background: b.marca.fundo, containerType: 'inline-size' }}>
+      <div className="w-full text-center" style={{ color: b.marca.cor, padding: '0 8cqw' }}>
+        <div className={cx(f, 'whitespace-nowrap font-black leading-none tracking-tight')} style={{ fontSize: `min(${max}px, calc(84cqw / ${larg.toFixed(2)}))` }}>
+          {sigla}
+        </div>
+        <div
+          className="whitespace-nowrap font-semibold uppercase opacity-80"
+          style={{ fontSize: `min(${big ? 12 : 8.5}px, 7cqw)`, letterSpacing: '0.3em', marginTop: '0.6em', marginRight: '-0.3em' }}
+        >
+          Barbearia
+        </div>
       </div>
     </div>
   )
