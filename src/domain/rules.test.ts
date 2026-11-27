@@ -15,7 +15,8 @@ let barbeiro: Usuario
 beforeEach(() => {
   agora = AGORA
   R.definirRelogio(() => agora)
-  db = criarSeed()
+  // Sem as parcerias de demonstração, para os preços dos testes serem os de tabela.
+  db = { ...criarSeed(AGORA), parcerias: [] }
   cliente = db.usuarios.find((u) => u.papel === 'Cliente')!
   barbeiro = db.usuarios.find((u) => u.papel === 'Barbeiro')!
 })
@@ -234,5 +235,74 @@ describe('área do barbeiro', () => {
     db = R.encerrarAtendimento(db, ag.id, barbeiro, 'Finalizado')
     const r = R.resumoBarbeiro(db, 'prof-001')
     expect(r).toMatchObject({ hoje: 2, previstoHoje: 140, faturadoMes: 85, atendidosMes: 1, pendentes: 1 })
+  })
+})
+
+describe('assinatura e parceria', () => {
+  it('a Procópio começa em teste grátis e aparece no catálogo', () => {
+    const a = R.assinaturaDe(db, 'bb001')
+    expect(R.situacaoAssinatura(a)).toBe('Teste')
+    expect(R.barbeariaVisivel(db.barbearias.find((b) => b.id === 'bb001')!)).toBe(true)
+  })
+
+  it('assinatura vencida tira a barbearia da busca e bloqueia reservas (RN08)', () => {
+    preparar()
+    avancar(31 * 24 * 60)
+    expect(R.situacaoAssinatura(R.assinaturaDe(db, 'bb001'))).toBe('Vencida')
+    expect(R.barbeariaVisivel(db.barbearias.find((b) => b.id === 'bb001')!)).toBe(false)
+    const dia = new Date(agora)
+    const d = `${dia.getFullYear()}-${String(dia.getMonth() + 1).padStart(2, '0')}-${String(dia.getDate() + 1).padStart(2, '0')}`
+    preparar(d)
+    expect(() => reservar(livre('10:00', d))).toThrow(/não está recebendo reservas/)
+  })
+
+  it('não deixa escolher plano menor que a equipe', () => {
+    expect(() => R.escolherPlano(db, barbeiro, 'basico')).toThrow(/permite até 2/)
+  })
+
+  it('no teste só troca o plano; fora dele fica aguardando pagamento', () => {
+    let r = R.escolherPlano(db, barbeiro, 'premium')
+    expect(r.assinatura.status).toBe('Teste')
+    avancar(31 * 24 * 60)
+    r = R.escolherPlano(r.db, barbeiro, 'profissional')
+    expect(r.assinatura.status).toBe('Pendente')
+    const pago = R.confirmarPagamento(r.db, 'bb001')
+    expect(R.situacaoAssinatura(R.assinaturaDe(pago, 'bb001'))).toBe('Ativa')
+    expect(R.barbeariaVisivel(pago.barbearias.find((b) => b.id === 'bb001')!)).toBe(true)
+  })
+
+  it('cliente não escolhe plano nem pede parceria', () => {
+    expect(() => R.escolherPlano(db, cliente, 'premium')).toThrow()
+    expect(() => R.solicitarParceria(db, cliente, 10, 30)).toThrow()
+  })
+
+  it('a Procópio de demonstração é parceira com 15%', () => {
+    expect(R.parceriaVigente(criarSeed(AGORA), 'bb001')?.descontoPct).toBe(15)
+  })
+
+  it('parceria só dá desconto depois de aprovada, e a reserva guarda o preço com desconto', () => {
+    preparar()
+    const r = R.solicitarParceria(db, barbeiro, 20, 30)
+    db = r.db
+    expect(R.parceriaVigente(db, 'bb001')).toBeUndefined()
+    expect(() => R.solicitarParceria(db, barbeiro, 10, 30)).toThrow(/ativa ou em análise/)
+    db = R.aprovarParceria(db, r.parceria.id)
+    const srv = db.servicos.find((s) => s.id === 'srv-001')!
+    expect(R.precoNoApp(db, srv)).toEqual({ preco: Math.round(srv.preco * 80) / 100, original: srv.preco, descontoPct: 20 })
+    const ag = reservar(livre('10:00'))
+    expect(ag.precoReservado).toBe(Math.round(srv.preco * 80) / 100)
+  })
+
+  it('encerrar a parceria acaba com o destaque na hora (RN09)', () => {
+    const r = R.solicitarParceria(db, barbeiro, 15, 90)
+    db = R.aprovarParceria(r.db, r.parceria.id)
+    avancar(60)
+    db = R.encerrarParceria(db, barbeiro, r.parceria.id)
+    expect(R.parceriaVigente(db, 'bb001')).toBeUndefined()
+    expect(R.precoNoApp(db, db.servicos[0]).original).toBeUndefined()
+  })
+
+  it('desconto fora da lista é recusado', () => {
+    expect(() => R.solicitarParceria(db, barbeiro, 50, 30)).toThrow(/entre 10% e 30%/)
   })
 })

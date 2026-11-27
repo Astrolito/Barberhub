@@ -1,5 +1,5 @@
 import { createClient, type RealtimePostgresChangesPayload, type SupabaseClient } from '@supabase/supabase-js'
-import type { Agendamento, Avaliacao, Banco, Barbearia, Horario, Profissional, Servico, Usuario } from '../domain/types'
+import type { Agendamento, Assinatura, Avaliacao, Banco, Barbearia, Horario, Parceria, Plano, Profissional, Servico, Usuario } from '../domain/types'
 import type { Backend, Estado } from './backend'
 import { uuid } from '../lib/id'
 
@@ -9,7 +9,19 @@ type Row = Record<string, any> // eslint-disable-line @typescript-eslint/no-expl
 const aBarbearia = (r: Row): Barbearia => ({
   id: r.id, nome: r.nome, endereco: r.endereco, cidade: r.cidade, bairro: r.bairro, descricao: r.descricao,
   lat: r.lat, lng: r.lng, fotoCapa: r.foto_capa ?? undefined, marca: r.marca,
-  telefone: r.telefone ?? undefined, whatsapp: r.whatsapp ?? undefined,
+  telefone: r.telefone ?? undefined, whatsapp: r.whatsapp ?? undefined, visivelAte: r.visivel_ate ?? undefined,
+})
+const aPlano = (r: Row): Plano => ({
+  id: r.id, nome: r.nome, precoMensal: Number(r.preco_mensal), maxProfissionais: r.max_profissionais, descricao: r.descricao, ordem: r.ordem,
+})
+// A chave da assinatura é a barbearia; o app usa o mesmo valor como id.
+const aAssinatura = (r: Row): Assinatura => ({
+  id: r.barbearia_id ?? r.id, barbeariaId: r.barbearia_id ?? r.id, planoId: r.plano_id, status: r.status, inicio: r.inicio,
+  validaAte: r.valida_ate, atualizadoEm: r.atualizado_em,
+})
+const aParceria = (r: Row): Parceria => ({
+  id: r.id, barbeariaId: r.barbearia_id, descontoPct: r.desconto_pct, dias: r.dias, status: r.status,
+  inicio: r.inicio ?? undefined, fim: r.fim ?? undefined, criadoEm: r.criado_em,
 })
 const aProfissional = (r: Row): Profissional => ({
   id: r.id, nome: r.nome, descricao: r.descricao, especialidades: r.especialidades, barbeariaId: r.barbearia_id,
@@ -49,7 +61,7 @@ const deUsuario = (p: Partial<Usuario>): Row => {
   return r
 }
 
-const vazio = (): Banco => ({ versao: 2, usuarios: [], barbearias: [], profissionais: [], servicos: [], horarios: [], agendamentos: [], avaliacoes: [] })
+const vazio = (): Banco => ({ versao: 3, usuarios: [], barbearias: [], profissionais: [], servicos: [], horarios: [], agendamentos: [], avaliacoes: [], planos: [], assinaturas: [], parcerias: [] })
 
 const SEM_CONEXAO = 'Sem conexão com o servidor. Verifique sua internet.'
 function erro(e: { message?: string } | null): never {
@@ -65,6 +77,8 @@ const TABELAS = {
   horarios: aHorario,
   agendamentos: aAgendamento,
   avaliacoes: aAvaliacao,
+  assinaturas: aAssinatura,
+  parcerias: aParceria,
 } as const
 type Tabela = keyof typeof TABELAS
 
@@ -84,7 +98,7 @@ export function criarBackendSupabase(url: string, chave: string): Backend {
   /** Troca ou insere linhas de uma tabela sem recarregar o resto. */
   function aplicar<T extends Tabela>(t: T, linhas: Row[], remover: string[] = []) {
     const conv = TABELAS[t] as (r: Row) => { id: string }
-    const novos = new Map(linhas.map((r) => [String(r.id), conv(r)]))
+    const novos = new Map(linhas.map((r) => { const x = conv(r); return [String(x.id), x] as const }))
     const atual = db[t] as { id: string }[]
     const fora = new Set(remover)
     const mantidos = atual.filter((x) => !fora.has(x.id)).map((x) => novos.get(x.id) ?? x)
@@ -101,7 +115,7 @@ export function criarBackendSupabase(url: string, chave: string): Backend {
     const ontem = new Date()
     ontem.setHours(0, 0, 0, 0)
     ontem.setDate(ontem.getDate() - 1)
-    const [b, p, sv, h, a, av, me] = await Promise.all([
+    const [b, p, sv, h, a, av, me, pl, as, pc] = await Promise.all([
       sb.from('barbearias').select('*'),
       sb.from('profissionais').select('*'),
       sb.from('servicos').select('*'),
@@ -109,11 +123,16 @@ export function criarBackendSupabase(url: string, chave: string): Backend {
       uid ? sb.from('agendamentos').select('*') : Promise.resolve({ data: [], error: null }),
       sb.from('avaliacoes').select('*').order('criado_em', { ascending: false }).limit(500),
       uid ? sb.from('profiles').select('*').eq('id', uid).maybeSingle() : Promise.resolve({ data: null, error: null }),
+      sb.from('planos').select('*').order('ordem'),
+      // RLS: só a assinatura da própria unidade (barbeiro); vazio para clientes.
+      uid ? sb.from('assinaturas').select('*') : Promise.resolve({ data: [], error: null }),
+      // RLS: parcerias em vigor + o histórico da própria unidade (barbeiro).
+      sb.from('parcerias').select('*'),
     ])
-    const f = [b, p, sv, h, a, av, me].find((x) => x.error)
+    const f = [b, p, sv, h, a, av, me, pl, as, pc].find((x) => x.error)
     if (f?.error) erro(f.error)
     db = {
-      versao: 2,
+      versao: 3,
       // Ordena o catálogo como no modo local (Procópio primeiro).
       barbearias: (b.data ?? []).map(aBarbearia).sort((x, y) => x.id.localeCompare(y.id)),
       profissionais: (p.data ?? []).map(aProfissional),
@@ -122,6 +141,9 @@ export function criarBackendSupabase(url: string, chave: string): Backend {
       agendamentos: (a.data ?? []).map(aAgendamento),
       avaliacoes: (av.data ?? []).map(aAvaliacao),
       usuarios: me.data ? [aUsuario(me.data)] : [],
+      planos: (pl.data ?? []).map(aPlano),
+      assinaturas: (as.data ?? []).map(aAssinatura),
+      parcerias: (pc.data ?? []).map(aParceria),
     }
     email = me.data?.email ?? null
     pronto = true
@@ -170,7 +192,7 @@ export function criarBackendSupabase(url: string, chave: string): Backend {
       let canal = sb.channel('barberhub')
       for (const t of Object.keys(TABELAS) as Tabela[]) {
         canal = canal.on('postgres_changes', { event: '*', schema: 'public', table: t }, (ev: RealtimePostgresChangesPayload<Row>) => {
-          if (ev.eventType === 'DELETE') aplicar(t, [], [String((ev.old as Row).id)])
+          if (ev.eventType === 'DELETE') aplicar(t, [], [String((ev.old as Row).id ?? (ev.old as Row).barbearia_id)])
           else aplicar(t, [ev.new as Row])
         })
       }
@@ -295,6 +317,30 @@ export function criarBackendSupabase(url: string, chave: string): Backend {
       const { error } = await sb.rpc('atualizar_foto_barbearia', { p_barbearia: id, p_foto: foto ?? null })
       if (error) erro(error)
       await buscar('barbearias', 'id', [id])
+    },
+    async escolherPlano(id) {
+      const { data, error } = await sb.rpc('escolher_plano', { p_plano: id })
+      if (error) erro(error)
+      const row = data as Row
+      aplicar('assinaturas', [row])
+      await buscar('barbearias', 'id', [row.barbearia_id])
+      return aAssinatura(row)
+    },
+    async cancelarAssinatura() {
+      const { data, error } = await sb.rpc('cancelar_assinatura')
+      if (error) erro(error)
+      aplicar('assinaturas', [data as Row])
+    },
+    async solicitarParceria(pct, dias) {
+      const { data, error } = await sb.rpc('solicitar_parceria', { p_desconto: pct, p_dias: dias })
+      if (error) erro(error)
+      aplicar('parcerias', [data as Row])
+      return aParceria(data as Row)
+    },
+    async encerrarParceria(id) {
+      const { data, error } = await sb.rpc('encerrar_parceria', { p_id: id })
+      if (error) erro(error)
+      aplicar('parcerias', [data as Row])
     },
     async subirImagem(pasta, dataUrl) {
       const u = eu()

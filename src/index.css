@@ -50,6 +50,8 @@
   transition: transform 200ms cubic-bezier(0.23, 1, 0.32, 1), border-color 150ms ease-out;
 }
 .bh-pin span { display: grid; transform: rotate(45deg); }
+/* Parceira BarberHUB: pino dourado com borda escura (o selo aparece no cartão). */
+.bh-pin--parceira { background: #fbbf24; color: #111; border-color: #111; }
 .bh-pin--ativo { background: #fff; color: #1d6fe0; border-color: #1d6fe0; transform: rotate(-45deg) scale(1.15); }
 .bh-eu {
   width: 18px; height: 18px; margin: 2px; border-radius: 9999px; background: #1d6fe0; border: 3px solid #fff;

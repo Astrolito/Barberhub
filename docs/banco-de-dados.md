@@ -7,16 +7,17 @@ PostgreSQL no Supabase, região São Paulo (`sa-east-1`). O esquema está em `su
 | `20261114000000_init.sql` | Tabelas do catálogo, perfis, horários e agendamentos; RLS; funções de reserva; Realtime |
 | `20261114000100_endurecer_funcoes.sql` | Ajustes do Security Advisor (`search_path`, permissões de execução) |
 | `20261123000000_melhorias.sql` | Acesso de barbeiro por lista de e-mails, avaliações, jornada configurável, remarcar, `Não compareceu`, serviços e unidade editáveis, Storage de fotos |
+| `20261127000000_assinaturas_parcerias.sql` | Modelo de receita: planos, assinaturas com teste grátis, parcerias com preço diferenciado, visibilidade por assinatura em dia e funções de administração |
 
 O catálogo inicial (barbearias, profissionais, serviços) está em `supabase/seed.sql`, gerado a partir de `src/data/seed.ts` com `node scripts/gerar-seed-sql.mjs`.
 
 ## Tabelas
 
-Todas as 8 tabelas têm **Row Level Security ativa**.
+Todas as 11 tabelas têm **Row Level Security ativa**.
 
 | Tabela | Conteúdo | Leitura pela API | Escrita |
 |---|---|---|---|
-| `barbearias` | Unidades: nome, endereço, bairro, coordenadas, descrição, telefone, WhatsApp, foto de capa | Pública | Só pelas funções do barbeiro da unidade |
+| `barbearias` | Unidades: nome, endereço, bairro, coordenadas, descrição, telefone, WhatsApp, foto de capa, `visivel_ate` | Pública | Só pelas funções do barbeiro da unidade |
 | `profissionais` | Barbeiros: nome, especialidades, unidade, foto, jornada | Pública | Só por `salvar_jornada` |
 | `servicos` | Nome, preço, duração, categoria, disponível | Pública | Só por `salvar_servico` |
 | `profiles` | Um por usuário do Auth: e-mail, nome, papel (`Cliente`/`Barbeiro`), profissional e unidade vinculados, localização, raio, favoritos | Só o próprio | O próprio (papel e vínculos protegidos por trigger) |
@@ -24,10 +25,27 @@ Todas as 8 tabelas têm **Row Level Security ativa**.
 | `agendamentos` | Reservas: cliente (id, e-mail e nome), serviço, profissional, horário, status, preço e duração reservados | Cliente titular ou barbeiro atribuído | Só pelas funções |
 | `avaliacoes` | Nota de 1 a 5 e comentário (até 500 caracteres) de um atendimento finalizado | Pública | Só por `avaliar_atendimento` |
 | `acessos_profissionais` | Lista de e-mails que viram Barbeiro, com o profissional vinculado | **Nenhuma** (sem policies) | Painel do Supabase / SQL |
+| `planos` | Básico, Profissional, Premium: preço mensal, limite de barbeiros (0 = sem limite), descrição | Pública (só ativos) | Painel do Supabase / SQL |
+| `assinaturas` | Uma por barbearia: plano, status (`Teste`, `Ativa`, `Pendente`, `Cancelada`), início, `valida_ate` | Só o barbeiro da unidade | `escolher_plano`, `cancelar_assinatura` e `admin_confirmar_pagamento` |
+| `parcerias` | Desconto (10 a 30%), dias (30 ou 90), status (`Solicitada`, `Ativa`, `Recusada`, `Cancelada`, `Encerrada`), início e fim | Em vigor: pública. Todas da unidade: o barbeiro dela | `solicitar_parceria`, `encerrar_parceria` e `admin_aprovar_parceria` / `admin_recusar_parceria` |
 
 Status de agendamento: `Confirmado`, `Cancelado`, `Finalizado`, `Não compareceu` (e `Indisponível`, legado do Glide).
 
 Um índice único parcial (`agendamento_ativo_por_horario`) impede duas reservas `Confirmado` no mesmo horário, mesmo com acessos simultâneos.
+
+## Assinaturas e parcerias
+
+**Assinatura.** Toda barbearia nova ganha, pelo trigger `barbearias_teste`, 30 dias de `Teste` no plano Básico. "Vencida" não é gravada: é qualquer assinatura com `valida_ate` no passado.
+
+- Durante o teste, `escolher_plano` só troca o plano. Fora do teste (ou para renovar), o plano fica `Pendente` até a equipe confirmar o pagamento com `admin_confirmar_pagamento`, que muda para `Ativa` e soma os meses pagos ao prazo.
+- `cancelar_assinatura` marca `Cancelada`; a unidade continua no ar até `valida_ate`.
+- O plano não aceita equipe maior que o limite de barbeiros.
+
+**Visibilidade (RN08).** O trigger `assinaturas_visibilidade` copia `valida_ate` para `barbearias.visivel_ate`, que é pública. O app só mostra na busca e no mapa as barbearias com `visivel_ate` no futuro, sem precisar ler a tabela de assinaturas. O trigger `agendamentos_regras_barbearia` recusa reservas e remarcações para unidades fora do prazo.
+
+**Parceria (RN09).** O barbeiro pede com `solicitar_parceria(desconto, dias)` (exige assinatura em dia e nenhuma parceria aberta; um índice único garante uma só). A equipe aprova com `admin_aprovar_parceria`, que começa a contar na hora. Enquanto `Ativa` e dentro do período, a parceria é pública e o mesmo trigger de reservas grava o `preco_reservado` já com o desconto. `encerrar_parceria` cancela o pedido ou encerra antes do fim. A ordem da busca não muda: o destaque é a seção "Parceiras BarberHUB", o selo e o pino dourado.
+
+As funções `admin_*` não podem ser executadas pela API (nem `anon` nem `authenticated`); rode no SQL Editor. Exemplos em [implantacao.md](implantacao.md#cobrança-e-parcerias).
 
 ## Papel de barbeiro
 
@@ -58,8 +76,14 @@ Horários, reservas, avaliações, serviços e dados da unidade só mudam por fu
 | `salvar_servico(servico)` | Barbeiro | Cria ou edita serviço da própria unidade |
 | `atualizar_barbearia(descricao, telefone, whatsapp)` | Barbeiro | Dados da própria unidade |
 | `atualizar_foto_barbearia(barbearia, foto)` | Barbeiro | Foto de capa da própria unidade |
+| `escolher_plano(plano)` | Barbeiro | Assina, troca ou renova o plano da unidade (RF15, RF16) |
+| `cancelar_assinatura()` | Barbeiro | Cancela; a unidade segue no ar até o fim do prazo (RF16) |
+| `solicitar_parceria(desconto, dias)` | Barbeiro | Pede a parceria com o preço diferenciado (RF17) |
+| `encerrar_parceria(id)` | Barbeiro | Cancela o pedido ou encerra a parceria em vigor |
+| `admin_confirmar_pagamento(barbearia, meses)` | Equipe (SQL Editor) | Assinatura `Ativa` e prazo somado |
+| `admin_aprovar_parceria(id)` / `admin_recusar_parceria(id)` | Equipe (SQL Editor) | Analisa o pedido de parceria |
 
-Funções auxiliares: `meu_profissional_id()` (usada pela policy de `agendamentos`), `meu_perfil_barbeiro()`, `jornada_padrao()`, `minutos_do_dia()`, `normalizar_telefone()`, e os triggers `handle_new_user` e `proteger_perfil`.
+Funções auxiliares: `meu_profissional_id()` (usada pela policy de `agendamentos`), `minha_barbearia_id()` (policies de `assinaturas` e `parcerias`), `meu_perfil_barbeiro()`, `jornada_padrao()`, `minutos_do_dia()`, `normalizar_telefone()`, e os triggers `handle_new_user`, `proteger_perfil`, `iniciar_teste`, `sincronizar_visibilidade` e `regras_reserva_barbearia`.
 
 ## Storage
 
@@ -70,7 +94,7 @@ Bucket público `fotos` (até 1 MB, JPEG/PNG/WebP):
 
 ## Realtime
 
-Publicação `supabase_realtime` com `horarios`, `agendamentos`, `barbearias`, `profissionais`, `servicos` e `avaliacoes`. O app aplica só a linha alterada, sem recarregar tudo. A RLS continua valendo: cada pessoa só recebe as reservas que pode ler.
+Publicação `supabase_realtime` com `horarios`, `agendamentos`, `barbearias`, `profissionais`, `servicos`, `avaliacoes`, `assinaturas` e `parcerias`. O app aplica só a linha alterada, sem recarregar tudo. A RLS continua valendo: cada pessoa só recebe as reservas que pode ler.
 
 ## Observação
 

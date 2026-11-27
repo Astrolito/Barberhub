@@ -44,6 +44,8 @@ export interface Barbearia {
   /** Contato público, preenchido pelo barbeiro vinculado. */
   telefone?: string
   whatsapp?: string
+  /** Até quando aparece no catálogo e recebe reservas (assinatura em dia, RN08). */
+  visivelAte?: string
   /** Identidade visual de espera quando não há foto. */
   marca: { sigla: string; cor: string; fundo: string; fonte?: 'serif' | 'sans' | 'script' }
 }
@@ -132,6 +134,47 @@ export interface Avaliacao {
   criadoEm: string
 }
 
+// ───────────── Modelo de receita (27/11/2026) ─────────────
+
+export interface Plano {
+  id: string
+  nome: string
+  precoMensal: number
+  /** 0 = sem limite. */
+  maxProfissionais: number
+  descricao: string
+  ordem: number
+}
+
+/** Gravado no banco. "Vencida" é calculada a partir de validaAte. */
+export type StatusAssinatura = 'Teste' | 'Ativa' | 'Pendente' | 'Cancelada'
+
+export interface Assinatura {
+  /** Igual ao barbeariaId (uma assinatura por barbearia). */
+  id: string
+  barbeariaId: string
+  planoId: string
+  status: StatusAssinatura
+  inicio: string
+  validaAte: string
+  atualizadoEm: string
+}
+
+export type StatusParceria = 'Solicitada' | 'Ativa' | 'Recusada' | 'Cancelada' | 'Encerrada'
+
+/** Parceria com a plataforma: preço diferenciado pelo app em troca de destaque. */
+export interface Parceria {
+  id: string
+  barbeariaId: string
+  /** Desconto em todos os serviços agendados pelo app. */
+  descontoPct: number
+  dias: number
+  status: StatusParceria
+  inicio?: string
+  fim?: string
+  criadoEm: string
+}
+
 export interface OpcaoDistancia {
   nome: string
   limiteKm: number
@@ -146,4 +189,9 @@ export interface Banco {
   horarios: Horario[]
   agendamentos: Agendamento[]
   avaliacoes: Avaliacao[]
+  planos: Plano[]
+  /** No modo Supabase, só a da unidade do barbeiro logado. */
+  assinaturas: Assinatura[]
+  /** Em vigor (públicas) + as da unidade do barbeiro logado. */
+  parcerias: Parceria[]
 }

@@ -3,7 +3,7 @@
 // Supabase/Firebase/API própria sem mudar telas nem regras.
 
 import type { Banco } from '../domain/types'
-import { criarSeed } from './seed'
+import { criarSeed, receitaInicial } from './seed'
 
 export interface Repositorio {
   carregar(): Banco
@@ -20,8 +20,8 @@ export class RepositorioLocal implements Repositorio {
     try {
       const raw = localStorage.getItem(CHAVE)
       if (raw) {
-        const db = JSON.parse(raw) as Banco
-        if (db.versao === 2) return (this.memoria = db)
+        let db = JSON.parse(raw) as Banco
+        if (db.versao === 3) return (this.memoria = db)
         // v1 → v2: avaliações, nome do cliente na reserva, sem tentativas "Indisponível".
         if (db.versao === 1) {
           const nomes = new Map(db.usuarios.map((u) => [u.email, u.nome]))
@@ -33,8 +33,15 @@ export class RepositorioLocal implements Repositorio {
               .filter((a) => a.status !== 'Indisponível')
               .map((a) => ({ ...a, clienteNome: a.clienteNome ?? nomes.get(a.clienteEmail) })),
           }
-          this.salvar(v2)
-          return (this.memoria = v2)
+          db = v2
+        }
+        // v2 → v3: planos, assinaturas e parcerias.
+        if (db.versao === 2) {
+          const receita = receitaInicial(db.barbearias.map((b) => b.id))
+          const ate = new Map(receita.assinaturas.map((a) => [a.barbeariaId, a.validaAte]))
+          const v3: Banco = { ...db, ...receita, versao: 3, barbearias: db.barbearias.map((b) => ({ ...b, visivelAte: ate.get(b.id) })) }
+          this.salvar(v3)
+          return (this.memoria = v3)
         }
       }
     } catch {

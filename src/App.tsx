@@ -10,6 +10,7 @@ import Agendamentos, { AgendamentoDetalhe, Historico } from './pages/Agendamento
 import Perfil, { Favoritos, MeusDados, Pagamentos } from './pages/Perfil'
 import Entrar from './pages/Entrar'
 import { Ajuda, Sobre } from './pages/Info'
+import PlanoBarbearia from './pages/barbeiro/Plano'
 import AreaBarbeiro, { Atendimentos, MeusHorarios, MinhaAgenda, MinhaBarbearia, Servicos } from './pages/barbeiro/AreaBarbeiro'
 
 function ScrollTop() {
@@ -51,6 +52,7 @@ export default function App() {
           <Route path="/barbeiro/horarios" element={auth(<MeusHorarios />)} />
           <Route path="/barbeiro/agenda" element={auth(<MinhaAgenda />)} />
           <Route path="/barbeiro/servicos" element={auth(<Servicos />)} />
+          <Route path="/barbeiro/plano" element={auth(<PlanoBarbearia />)} />
           <Route path="/ajuda" element={<Ajuda />} />
           <Route path="/sobre" element={<Sobre />} />
           <Route path="*" element={<NaoEncontrado />} />

@@ -213,6 +213,26 @@ export function Capa({ b, className, big }: { b: Barbearia; className?: string; 
   )
 }
 
+/** Selo das barbearias parceiras (RN09: o destaque sempre vem identificado). */
+export function SeloParceira({ pct, className }: { pct?: number; className?: string }) {
+  return (
+    <span className={cx('inline-flex items-center gap-1 rounded-full bg-amber-400 px-2 py-0.5 text-[11.5px] font-bold uppercase tracking-wide text-black', className)}>
+      Parceira{pct ? ` · −${pct}%` : ''}
+    </span>
+  )
+}
+
+/** Preço do serviço pelo app; com parceria, mostra o original riscado. */
+export function PrecoApp({ preco, original, formatar }: { preco: number; original?: number; formatar: (v: number) => string }) {
+  if (original === undefined) return <>{formatar(preco)}</>
+  return (
+    <>
+      <span className="mr-1.5 text-faint line-through decoration-1">{formatar(original)}</span>
+      <span className="text-amber-300">{formatar(preco)}</span>
+    </>
+  )
+}
+
 /** Bottom sheet com entrada ease-drawer e fechamento por arrasto. */
 export function Sheet({ open, onClose, title, children }: { open: boolean; onClose: () => void; title: string; children: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null)

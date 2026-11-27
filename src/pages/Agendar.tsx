@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useApp, useUsuario } from '../state/AppContext'
-import { Button, Empty, Field, Note, Page, Sheet, TopBar, cx } from '../components/ui'
+import { Button, Empty, Field, Note, Page, PrecoApp, Sheet, TopBar, cx } from '../components/ui'
 import { ICalendar, IClock, IRepeat, IconeServico } from '../components/Icons'
 import { NaoEncontrado } from './Barbearia'
-import { horariosLivres, jornadaDe, resumoJornada, servicoCabe } from '../domain/rules'
+import { horariosLivres, jornadaDe, precoNoApp, resumoJornada, servicoCabe } from '../domain/rules'
 import { brlFull, dataHoraLonga, diaLocal, hora, somarMinutos } from '../lib/format'
 import type { Agendamento, Servico } from '../domain/types'
 
@@ -43,7 +43,7 @@ function BannerFluxo({ servico, remarcar }: { servico?: Servico; remarcar?: Agen
         <span className="flex-1">
           <span className="block text-[15px] font-semibold">{servico.nome}</span>
           <span className="block text-[13.5px] text-muted">
-            {servico.duracaoMinutos} min · {brlFull(servico.preco)}
+            {servico.duracaoMinutos} min · <PrecoApp {...precoNoApp(db, servico)} formatar={brlFull} />
           </span>
         </span>
       </div>
@@ -302,7 +302,7 @@ export function Agendar() {
                   <span className="block text-[15.5px] font-semibold">{s.nome}</span>
                   <span className="block text-[13.5px] text-muted">{s.duracaoMinutos} min</span>
                 </span>
-                <span className="text-[15.5px] font-semibold tabular-nums">{brlFull(s.preco)}</span>
+                <span className="text-[15.5px] font-semibold tabular-nums"><PrecoApp {...precoNoApp(db, s)} formatar={brlFull} /></span>
               </button>
             )
           })}
@@ -319,7 +319,7 @@ export function Agendar() {
                   {hora(h.inicio)} – {hora(somarMinutos(h.inicio, sel.duracaoMinutos))} · {sel.duracaoMinutos} min
                 </div>
               </div>
-              <div className="text-[22px] font-bold tabular-nums">{brlFull(sel.preco)}</div>
+              <div className="text-right text-[22px] font-bold tabular-nums"><PrecoApp {...precoNoApp(db, sel)} formatar={brlFull} /></div>
             </div>
           ) : (
             <div className="mt-2 text-[15px]">Escolha um serviço acima.</div>

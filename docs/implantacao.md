@@ -46,6 +46,33 @@ Dica para testes: use um alias do mesmo e-mail (por exemplo `seunome+barbeiro@gm
 
 Os ids dos profissionais (`prof-001`, `prof-002`…) estão em `src/data/seed.ts` e na tabela `profissionais`.
 
+## Cobrança e parcerias
+
+O app não tem gateway de pagamento. A equipe acompanha os pedidos e confirma no **SQL Editor** do Supabase (as funções `admin_*` não são liberadas para a API).
+
+```sql
+-- Quem está aguardando pagamento, em teste ou vencendo
+select b.nome, a.plano_id, a.status, a.valida_ate
+  from assinaturas a join barbearias b on b.id = a.barbearia_id
+ order by a.valida_ate;
+
+-- Pagamento recebido: ativa o plano por 1 mês (ou mais), somando ao prazo que restava
+select admin_confirmar_pagamento('bb001', 1);
+
+-- Pedidos de parceria em análise
+select p.id, b.nome, p.desconto_pct, p.dias, p.criado_em
+  from parcerias p join barbearias b on b.id = p.barbearia_id
+ where p.status = 'Solicitada';
+
+-- Aprovar (o destaque começa agora) ou recusar
+select admin_aprovar_parceria('<id do pedido>');
+select admin_recusar_parceria('<id do pedido>');
+```
+
+Os preços dos planos ficam na tabela `planos` (`update planos set preco_mensal = 59.90 where id = 'basico';`). Os descontos aceitos (10 a 30%) e os períodos (30 ou 90 dias) estão em `src/domain/rules.ts` e na migração `20261127000000_assinaturas_parcerias.sql`; mude nos dois.
+
+No modo demonstração, a página **Plano e parceria** tem botões "Simular aprovação" e "Simular pagamento confirmado", que fazem o papel da equipe.
+
 ## Vercel
 
 1. Importe o repositório em vercel.com/new. O `vercel.json` já define o build (`npm run build`, saída `dist`) e os cabeçalhos de segurança e cache.

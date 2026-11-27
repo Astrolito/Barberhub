@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useApp, useUsuario } from '../state/AppContext'
-import { Button, Capa, Note, Page, SearchInput, Switch, cx } from '../components/ui'
+import { Button, Capa, Note, Page, SearchInput, SeloParceira, Switch, cx } from '../components/ui'
 import { ILocate, ILocateOff, IMap, IPin, ISearch, IStar } from '../components/Icons'
 import { OPCOES_DISTANCIA } from '../data/seed'
-import { notaDaBarbearia, raioAplicado } from '../domain/rules'
+import { barbeariaVisivel, notaDaBarbearia, parceriaVigente, raioAplicado } from '../domain/rules'
 import { BAIRROS, capturarGps, distanciaKm, geocodificarEndereco, gpsIndisponivel, pontoDoBairro } from '../lib/geo'
 import { km, primeiroNome } from '../lib/format'
 import type { Barbearia } from '../domain/types'
@@ -24,12 +24,23 @@ export default function Home() {
   const lista = useMemo(() => {
     const q = busca.trim().toLowerCase()
     let itens = db.barbearias
-      .filter((b) => b.cidade === 'Manaus')
+      .filter((b) => b.cidade === 'Manaus' && barbeariaVisivel(b))
       .map((b) => ({ b, dist: ref ? distanciaKm(ref, b) : undefined }))
     if (ref) itens = itens.filter((x) => raio === 0 || (x.dist ?? 0) <= raio).sort((a, b) => (a.dist ?? 0) - (b.dist ?? 0))
     if (q) itens = itens.filter(({ b }) => `${b.nome} ${b.bairro}`.toLowerCase().includes(q))
     return itens
   }, [db.barbearias, busca, ref, raio])
+
+  // Parceiras BarberHUB: destaque próprio, fora da lista por distância (que segue na ordem da busca).
+  const parceiras = useMemo(
+    () =>
+      db.barbearias
+        .filter((b) => b.cidade === 'Manaus' && barbeariaVisivel(b))
+        .map((b) => ({ b, p: parceriaVigente(db, b.id), dist: ref ? distanciaKm(ref, b) : undefined }))
+        .filter((x) => x.p)
+        .sort((a, b) => (a.dist ?? 0) - (b.dist ?? 0)),
+    [db, ref],
+  )
 
   async function ligarGps(on: boolean) {
     if (!on) {
@@ -184,6 +195,36 @@ export default function Home() {
         )}
       </section>
 
+      {/* Parceiras BarberHUB: preço especial agendando pelo app */}
+      {parceiras.length > 0 && (
+        <section className="mt-8">
+          <div className="flex items-baseline justify-between gap-3">
+            <h2 className="text-[22px] font-bold tracking-tight">Parceiras BarberHUB</h2>
+            <span className="text-[13px] font-medium text-amber-300">Preço especial pelo app</span>
+          </div>
+          <div className="no-scrollbar -mx-4 mt-3 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-1">
+            {parceiras.map(({ b, p, dist }) => (
+              <Link
+                key={b.id}
+                to={`/barbearia/${b.id}`}
+                className="card-press flex w-[260px] shrink-0 snap-start items-center gap-3 rounded-2xl border border-amber-400/40 bg-amber-400/[0.07] p-2.5"
+              >
+                <span className="h-[72px] w-[72px] shrink-0 overflow-hidden rounded-xl border border-line/60">
+                  <Capa b={b} />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <SeloParceira />
+                  <span className="mt-1 block truncate text-[15px] font-semibold leading-5">{b.nome}</span>
+                  <span className="block text-[13.5px] text-muted">
+                    <b className="font-semibold text-amber-300">{p!.descontoPct}% off</b> em todos os serviços{dist !== undefined ? ` · ${km(dist)}` : ''}
+                  </span>
+                </span>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
+
       {/* Catálogo */}
       <h2 className="mb-3 mt-8 text-[24px] font-bold tracking-tight">Explore Manaus</h2>
       <SearchInput value={busca} onChange={setBusca} placeholder="Procurar barbearia ou bairro" />
@@ -218,10 +259,12 @@ export default function Home() {
 export function CardBarbearia({ b, dist, i = 0 }: { b: Barbearia; dist?: number; i?: number }) {
   const { db } = useApp()
   const nota = notaDaBarbearia(db, b.id)
+  const parceria = parceriaVigente(db, b.id)
   return (
     <Link to={`/barbearia/${b.id}`} className="card-press group block animate-fade-up" style={{ animationDelay: `${Math.min(i, 8) * 40}ms` }}>
       <div className="relative aspect-[4/3] overflow-hidden rounded-2xl border border-line/60">
         <Capa b={b} className="transition-transform duration-300 ease-out group-hover:scale-[1.03]" />
+        {parceria && <SeloParceira pct={parceria.descontoPct} className="absolute left-2 top-2 shadow-md shadow-black/40" />}
         {dist !== undefined && (
           <span className="absolute bottom-2 left-2 rounded-full bg-black/70 px-2 py-0.5 text-[12px] font-semibold text-white backdrop-blur">{km(dist)}</span>
         )}

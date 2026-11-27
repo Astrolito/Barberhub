@@ -1,4 +1,4 @@
-import type { Banco, OpcaoDistancia } from '../domain/types'
+import type { Assinatura, Banco, OpcaoDistancia, Parceria, Plano } from '../domain/types'
 
 // Catálogo de Manaus (doc v1.4, seção 3.2). Coordenadas aproximadas pelo bairro/
 // endereço público; serviços, profissionais e horários são massa acadêmica.
@@ -18,9 +18,58 @@ export const RAIO_PADRAO_KM = 5
 export const DEMO_CLIENTE_EMAIL = 'cliente@barberhub.app'
 export const DEMO_BARBEIRO_EMAIL = 'barbeiro@barberhub.app'
 
-export function criarSeed(): Banco {
+/** Planos de assinatura (iguais aos da migração 20261127000000_assinaturas_parcerias.sql). */
+export const PLANOS: Plano[] = [
+  { id: 'basico', nome: 'Básico', precoMensal: 49.9, maxProfissionais: 2, descricao: 'Para quem está começando: agenda online para até 2 barbeiros.', ordem: 1 },
+  { id: 'profissional', nome: 'Profissional', precoMensal: 89.9, maxProfissionais: 5, descricao: 'Para barbearias em crescimento: até 5 barbeiros.', ordem: 2 },
+  { id: 'premium', nome: 'Premium', precoMensal: 149.9, maxProfissionais: 0, descricao: 'Barbeiros ilimitados, para redes e unidades grandes.', ordem: 3 },
+]
+
+const DIA_MS = 864e5
+
+export function criarSeed(agora = Date.now()): Banco {
+  const db = criarCatalogo()
+  const receita = receitaInicial(db.barbearias.map((b) => b.id), agora)
+  const ate = new Map(receita.assinaturas.map((a) => [a.barbeariaId, a.validaAte]))
+  return { ...db, ...receita, barbearias: db.barbearias.map((b) => ({ ...b, visivelAte: ate.get(b.id) })) }
+}
+
+/**
+ * Assinaturas e parcerias de demonstração: a Procópio (unidade do barbeiro de teste) em teste grátis,
+ * as demais com o plano Profissional ativo; Barões (20%) e a própria Procópio (15%) como parceiras.
+ */
+export function receitaInicial(ids: string[], agora = Date.now()) {
+  const iso = (ms: number) => new Date(ms).toISOString()
+  const assinaturas: Assinatura[] = ids.map((id) => ({
+    id,
+    barbeariaId: id,
+    planoId: 'profissional',
+    status: id === 'bb001' ? 'Teste' : 'Ativa',
+    inicio: iso(agora),
+    validaAte: iso(agora + (id === 'bb001' ? 30 : 365) * DIA_MS),
+    atualizadoEm: iso(agora),
+  }))
+  const parcerias: Parceria[] = [
+    ['bb003', 20],
+    ['bb001', 15],
+  ]
+    .filter(([id]) => ids.includes(id as string))
+    .map(([id, pct]) => ({
+      id: `parc-${id}`,
+      barbeariaId: id as string,
+      descontoPct: pct as number,
+      dias: 90,
+      status: 'Ativa',
+      inicio: iso(agora),
+      fim: iso(agora + 90 * DIA_MS),
+      criadoEm: iso(agora),
+    }))
+  return { planos: PLANOS, assinaturas, parcerias }
+}
+
+function criarCatalogo(): Banco {
   return {
-    versao: 2,
+    versao: 3,
     usuarios: [
       {
         id: 'u-cliente',
@@ -191,5 +240,8 @@ export function criarSeed(): Banco {
     horarios: [],
     agendamentos: [],
     avaliacoes: [],
+    planos: [],
+    assinaturas: [],
+    parcerias: [],
   }
 }

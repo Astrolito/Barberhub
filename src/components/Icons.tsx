@@ -50,6 +50,7 @@ export const IRepeat = (p: P) => (<svg {...base(p)}><path d="M17 2l3 3-3 3" /><p
 export const IPlus = (p: P) => (<svg {...base(p)}><path d="M12 5v14M5 12h14" /></svg>)
 export const IWifiOff = (p: P) => (<svg {...base(p)}><path d="M3 3l18 18M8.5 16.5a5 5 0 0 1 7 0M5 13a10 10 0 0 1 5-2.7M19 13a10 10 0 0 0-2.4-1.7M2 9.5a15 15 0 0 1 4.3-2.6M22 9.5A15 15 0 0 0 11 5.1M12 20h.01" /></svg>)
 export const IChart = (p: P) => (<svg {...base(p)}><path d="M4 20V10M10 20V4M16 20v-7M22 20H2" /></svg>)
+export const ITag = (p: P) => (<svg {...base(p)}><path d="M3 12V4a1 1 0 0 1 1-1h8l9 9-9 9-9-9Z" /><circle cx="7.5" cy="7.5" r="1.5" /></svg>)
 export const IList = (p: P) => (<svg {...base(p)}><path d="M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01" /></svg>)
 
 export function IconeServico({ tipo, size = 28 }: { tipo: 'corte' | 'barba' | 'combo' | 'pezinho'; size?: number }) {
