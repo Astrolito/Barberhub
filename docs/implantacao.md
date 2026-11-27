@@ -14,7 +14,15 @@
 1. Crie um projeto no Supabase.
 2. Aplique os arquivos de `supabase/migrations/` em ordem e depois `supabase/seed.sql`, pelo SQL Editor ou com a CLI (`supabase db push`).
 3. Em **Authentication > URL Configuration**, defina o *Site URL* como o domínio da Vercel (`https://barberhub-one.vercel.app`) e adicione-o em *Redirect URLs*. Para desenvolvimento, adicione também `http://localhost:5173`.
-4. Em **Authentication > Email Templates > Magic Link**, inclua `{{ .Token }}` no texto, para o e-mail trazer também o código de 6 dígitos (necessário no app instalado, onde o link não volta para o app).
+4. Em **Authentication > Emails > Templates**, os modelos **Confirm signup** (primeiro acesso de um e-mail novo) e **Magic Link** (acessos seguintes) precisam trazer `{{ .Token }}`. Sem isso o usuário novo recebe só o link e não tem código para digitar, e no app instalado o link não volta para o app. Use o mesmo HTML nos dois modelos:
+
+   ```html
+   <h2>Seu código do BarberHUB</h2>
+   <p>Digite este código no app para entrar:</p>
+   <p style="font-size:32px;font-weight:bold;letter-spacing:6px">{{ .Token }}</p>
+   <p>Ou toque no link: <a href="{{ .ConfirmationURL }}">Entrar no BarberHUB</a></p>
+   <p>O código vale por 1 hora. Se não foi você, ignore este e-mail.</p>
+   ```
 5. Copie a *Project URL* e a chave pública (*anon/publishable*) para as variáveis do front-end.
 
 O que cada tabela e função faz está em [banco-de-dados.md](banco-de-dados.md).
