@@ -9,9 +9,8 @@
 | 23/11/2026 | Melhorias (PR #3): agenda configurável, remarcar, avaliações, acesso de barbeiro por lista de e-mails, fotos no Storage, testes e CI. |
 | 23/11/2026 | Mapa: tiles do CARTO trocados pelos do OpenStreetMap (PR #4). |
 | 27/11/2026 | Banco Supabase reativado depois da pausa do plano gratuito; documentação reorganizada em `docs/` com o documento de requisitos. |
-| 27/11/2026 | Assinatura mensal e Parcerias BarberHUB (PR #5). |
-| 27/11/2026 | Início unificado: mapa, pesquisa e lista numa tela só; aba Mapa removida da tab bar. |
 | 27/11/2026 | Modelo de receita: assinatura mensal das barbearias (teste grátis de 30 dias, planos Básico, Profissional e Premium) e parcerias com preço diferenciado em destaque. |
+| 27/11/2026 | Início unificado: mapa, pesquisa e lista numa tela só; aba Mapa removida da tab bar. |
 
 ## Melhorias em relação ao Glide
 
