@@ -218,7 +218,18 @@ export function criarBackendSupabase(url: string, chave: string): Backend {
     async entrar(e) {
       const redirect = window.location.origin + window.location.pathname
       const { error } = await sb.auth.signInWithOtp({ email: e.trim().toLowerCase(), options: { emailRedirectTo: redirect } })
-      if (error) erro(error)
+      if (error) {
+        const m = error.message ?? ''
+        if (error.status === 429 || /rate limit|security purposes|too many/i.test(m)) {
+          const seg = m.match(/after (\d+) seconds?/i)?.[1]
+          erro({
+            message: seg
+              ? `Aguarde ${seg} segundos para pedir um novo código.`
+              : 'Muitos pedidos de código em pouco tempo. Tente de novo em alguns minutos.',
+          })
+        }
+        erro(error)
+      }
       return 'codigo_enviado'
     },
     async verificarCodigo(e, codigo) {
