@@ -73,7 +73,7 @@ As rotas da Área do barbeiro só mostram conteúdo para perfis com papel `Barbe
 
 `src/pages/Home.tsx`, com Leaflet. Busca e mapa ficam numa tela só (antes eram o Início com a lista e uma aba Mapa separada).
 
-- O mapa ocupa a tela entre o cabeçalho e a tab bar. Em cima: a pesquisa (barbearia, bairro ou endereço), o botão de GPS, o chip da localização atual (abre o painel com GPS, endereço e bairro) e os chips de raio.
+- O mapa ocupa a tela entre o cabeçalho e a tab bar. Em cima: a pesquisa (barbearia, bairro ou endereço), o botão de GPS, o chip da localização atual (abre o painel com GPS, endereço e bairro) e o seletor de raio (Até 1 km … Sem limite).
 - Embaixo, uma gaveta com a lista: recolhida, o mapa domina; aberta (arrastando ou tocando na alça), a lista domina. Tem o próximo agendamento, a seção "Parceiras BarberHUB" e as barbearias da mais próxima para a mais distante.
 - A pesquisa filtra a lista e os pinos ao mesmo tempo e reenquadra o mapa no resultado. Sem nenhuma barbearia com aquele nome, Enter (ou "Buscar como endereço") usa o texto como endereço.
 - Tocar num pino destaca a barbearia na lista; o botão de pino na lista centraliza o mapa nela. Parceiras têm pino dourado.

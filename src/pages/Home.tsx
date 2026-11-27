@@ -269,14 +269,6 @@ export default function Home() {
     else setAberta(dy < 0)
   }
 
-  // Mantém o chip do raio escolhido à vista na faixa rolável.
-  const chips = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    const c = chips.current
-    const ativo = c?.querySelector('[aria-pressed="true"]') as HTMLElement | null
-    if (c && ativo) c.scrollTo({ left: ativo.offsetLeft - c.clientWidth / 2 + ativo.offsetWidth / 2, behavior: 'smooth' })
-  }, [raio, !!ref])
-
   const resumo = q
     ? visiveis.length
       ? `${visiveis.length} ${visiveis.length === 1 ? 'resultado' : 'resultados'} para "${busca.trim()}"`
@@ -330,33 +322,34 @@ export default function Home() {
           </button>
         </form>
 
-        <div className="pointer-events-auto mx-auto mt-2 flex max-w-[520px] gap-2">
+        <div className="pointer-events-auto mx-auto mt-2 flex max-w-[520px] select-none gap-2">
           <button
             onClick={() => setPainelLocal(true)}
             className={cx(
-              'press flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-line bg-bg/85 px-3 text-[14px] font-medium text-ink shadow-lg shadow-black/40 backdrop-blur-xl',
-              ref && 'max-w-[46%]',
+              'press flex h-9 min-w-0 items-center gap-1.5 rounded-full border border-line bg-bg/85 px-3 text-[14px] font-medium text-ink shadow-lg shadow-black/40 backdrop-blur-xl',
             )}
           >
             <IPin size={15} className={ref ? 'text-brand-ink' : 'text-faint'} />
             <span className="truncate">{ref ? ref.rotulo.replace(/^Bairro /, '') : 'Definir localização'}</span>
           </button>
-          <div ref={chips} className="no-scrollbar relative flex min-w-0 flex-1 gap-2 overflow-x-auto">
-          {ref &&
-            OPCOES_DISTANCIA.map((o) => (
-              <button
-                key={o.limiteKm}
-                aria-pressed={raio === o.limiteKm}
-                onClick={() => atualizarUsuario({ raioBuscaKm: o.limiteKm })}
-                className={cx(
-                  'press h-9 shrink-0 rounded-full border px-3.5 text-[14px] font-medium shadow-lg shadow-black/40 backdrop-blur-xl transition-colors duration-150',
-                  raio === o.limiteKm ? 'border-brand bg-brand text-white' : 'border-line bg-bg/85 text-muted hover:text-ink',
-                )}
+          {/* Raio: um seletor compacto no lugar da fileira de chips, que não cabia e não rolava com o mouse. */}
+          {ref && (
+            <label className="relative flex h-9 shrink-0 items-center rounded-full border border-brand bg-brand text-[14px] font-medium text-white shadow-lg shadow-black/40">
+              <span className="sr-only">Distância das barbearias</span>
+              <select
+                value={raio}
+                onChange={(e) => atualizarUsuario({ raioBuscaKm: Number(e.target.value) })}
+                className="h-full cursor-pointer appearance-none rounded-full bg-transparent pl-3.5 pr-8 focus:outline-none"
               >
-                {o.nome}
-              </button>
-            ))}
-          </div>
+                {OPCOES_DISTANCIA.map((o) => (
+                  <option key={o.limiteKm} value={o.limiteKm} className="bg-surface text-ink">
+                    {o.nome}
+                  </option>
+                ))}
+              </select>
+              <IChevron size={15} className="pointer-events-none absolute right-2.5 rotate-90" />
+            </label>
+          )}
         </div>
       </div>
 
@@ -527,7 +520,7 @@ function LinhaBarbearia({ item: { b, dist, parceria }, ativa, onMapa }: { item: 
   )
 }
 
-/** Painel para definir o ponto de busca: GPS, endereço ou bairro (o raio fica nos chips sobre o mapa). */
+/** Painel para definir o ponto de busca: GPS, endereço ou bairro (o raio fica no seletor sobre o mapa). */
 function PainelLocalizacao({
   open,
   onClose,
@@ -618,7 +611,7 @@ function PainelLocalizacao({
       </div>
 
       <div className="mt-5">
-        <Note>A distância é em linha reta. Escolha o raio nos botões sobre o mapa; sem localização, você vê o catálogo completo de Manaus.</Note>
+        <Note>A distância é em linha reta. Escolha o raio no seletor ao lado da localização, sobre o mapa; sem localização, você vê o catálogo completo de Manaus.</Note>
       </div>
       {ref && (
         <Button
